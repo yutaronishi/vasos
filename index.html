@@ -27,6 +27,10 @@
   .guia{position:absolute;left:10%;top:5%;right:10%;bottom:5%;border:2px dashed rgba(255,255,255,.75);border-radius:10px;pointer-events:none}
   .amostra{position:absolute;left:35%;top:45%;width:30%;height:30%;border:2px solid #ffd54f;border-radius:6px;pointer-events:none}
   .amostra::after{content:"cor";position:absolute;top:-20px;left:0;font-size:11px;color:#ffd54f}
+  .previa{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+  .previa-msg{position:absolute;left:8px;right:8px;bottom:8px;padding:6px 10px;border-radius:8px;font-size:14px;font-weight:600;text-align:center;color:#fff;background:rgba(0,0,0,.6);pointer-events:none}
+  .previa-msg.ok{background:rgba(46,125,50,.85)} .previa-msg.ruim{background:rgba(198,40,40,.85)}
+  .aviso{background:#fdecea;color:var(--erro);border-radius:10px;padding:10px 12px;font-size:14px;font-weight:600;margin-bottom:8px}
   .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .25s}
   .flash.on{opacity:.8;transition:none}
   .camerr{background:#fdecea;color:var(--erro);padding:10px;border-radius:var(--raio);margin-top:8px;font-size:14px}
@@ -96,6 +100,8 @@
       <video id="video" playsinline muted autoplay></video>
       <div class="guia"></div>
       <div class="amostra"></div>
+      <canvas id="previa" class="previa"></canvas>
+      <div id="previaMsg" class="previa-msg" hidden></div>
       <div class="flash" id="flash"></div>
     </div>
     <div class="camerr" id="camErr" hidden></div>
@@ -106,6 +112,7 @@
     <button id="btCapturar" class="bt grande">📷 Capturar</button>
 
     <div id="resultado" hidden>
+      <div id="avisoCorte" class="aviso" hidden>A peça não coube inteira na guia: o contorno ficou cortado e a sugestão pode estar errada. Afaste o celular e capture de novo.</div>
       <h3>Leitura</h3>
       <div class="card snap">
         <img id="snapImg" alt="">
@@ -305,7 +312,7 @@
 
 <script>
 'use strict';
-const VERSAO_APP = '0.6';
+const VERSAO_APP = '0.7';
 // IA (MobileNet) desligada: o reconhecimento é só por código (contorno + cor). Para religar, true.
 const USAR_IA = false;
 
@@ -680,6 +687,7 @@ async function identificar() {
 function mostrarResultado() {
   $('#resultado').hidden = false;
   $('#snapImg').src = (cap.sil ? cap.sil.conferencia : cap.foto).toDataURL('image/jpeg', 0.7);
+  $('#avisoCorte').hidden = !(cap.sil && cap.sil.toca);
   const c0 = cap.cores[0];
   const nCal = Object.values(Cores.refs).filter(r => r.n > 0).length;
   $('#corLida').innerHTML = `<span class="sw" style="background:${cap.cor.hex}"></span> Cor lida: <b>${esc(Cat.nomeCor(c0.cor))}</b> <small class="sub">(${pct(c0.p)})</small>` +
@@ -982,6 +990,45 @@ function stModelo(txt, cls) { const p = $('#stModelo'); p.textContent = txt; p.c
 function stRede() { const p = $('#stRede'); p.textContent = navigator.onLine ? 'online' : 'offline'; p.className = 'pill ' + (navigator.onLine ? 'ok' : 'alerta'); }
 
 let abaAtual = 'ident';
+/* Prévia ao vivo: mostra o contorno que o app enxerga ANTES de capturar */
+const Previa = {
+  t: 0, ocupado: false, cv: document.createElement('canvas'), mini: document.createElement('canvas'),
+  passo() {
+    const ativo = abaAtual === 'ident' && $('#resultado').hidden && Cam.pronta() && window.Esteira && !document.hidden;
+    const tela = $('#previa'), msg = $('#previaMsg');
+    if (!ativo) { msg.hidden = true; tela.getContext('2d').clearRect(0, 0, tela.width, tela.height); return; }
+    if (this.ocupado) return; this.ocupado = true;
+    try {
+      // mesmo caminho da captura (recorte da guia em até 800 px), para a prévia bater com o resultado
+      const g = rectVideo(GUIA), k = Math.min(1, FOTO_MAX / Math.max(g.w, g.h));
+      this.cv.width = Math.round(g.w * k); this.cv.height = Math.round(g.h * k);
+      this.cv.getContext('2d').drawImage(video, g.x, g.y, g.w, g.h, 0, 0, this.cv.width, this.cv.height);
+      const r = Esteira.analisarFoto(this.cv, true);
+      // desenha o contorno sobre a guia
+      tela.width = vwrap.clientWidth; tela.height = vwrap.clientHeight;
+      const ctx = tela.getContext('2d'); ctx.clearRect(0, 0, tela.width, tela.height);
+      if (r) {
+        const m = this.mini; m.width = r.W; m.height = r.H; const mc = m.getContext('2d'); const im = mc.createImageData(r.W, r.H);
+        const L = r.lab, id = r.id, cor = r.toca ? [255, 70, 70] : [60, 255, 130];
+        for (let p = 0; p < L.length; p++) {
+          if (L[p] !== id) continue; const x = p % r.W, y = (p / r.W) | 0;
+          const borda = x === 0 || y === 0 || x === r.W - 1 || y === r.H - 1 || L[p - 1] !== id || L[p + 1] !== id || L[p - r.W] !== id || L[p + r.W] !== id;
+          if (borda) { im.data[p * 4] = cor[0]; im.data[p * 4 + 1] = cor[1]; im.data[p * 4 + 2] = cor[2]; im.data[p * 4 + 3] = 255; }
+          else { im.data[p * 4 + 1] = 255; im.data[p * 4 + 3] = 40; }
+        }
+        mc.putImageData(im, 0, 0);
+        const gx = tela.width * GUIA[0], gy = tela.height * GUIA[1], gw = tela.width * (GUIA[2] - GUIA[0]), gh = tela.height * (GUIA[3] - GUIA[1]);
+        ctx.imageSmoothingEnabled = false; ctx.drawImage(m, gx, gy, gw, gh);
+        msg.hidden = false;
+        if (r.toca) { msg.className = 'previa-msg ruim'; msg.textContent = 'Contorno encostou na guia: afaste o celular ou tire o que está grudado atrás'; }
+        else { msg.className = 'previa-msg ok'; msg.textContent = '✔ Peça inteira — pode capturar'; }
+      } else { msg.hidden = false; msg.className = 'previa-msg ruim'; msg.textContent = 'Não achei a peça — centralize o vaso na área amarela'; }
+    } catch (e) { console.warn('prévia', e); }
+    finally { this.ocupado = false; }
+  },
+  iniciar() { setInterval(() => this.passo(), 400); }
+};
+
 function trocarAba(aba) {
   abaAtual = aba;
   document.querySelectorAll('nav.abas button').forEach(b => b.classList.toggle('on', b.dataset.tab === aba));
@@ -1064,6 +1111,7 @@ async function iniciar() {
   await Promise.all([iniciarCatalogo(), Cores.carregar(), Treino.carregar()]);
   await atualizarFilaUI();
   trocarAba('ident');
+  Previa.iniciar();
   Modelo.carregar();
   Fila.enviar();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW', e));

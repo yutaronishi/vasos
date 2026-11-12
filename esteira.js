@@ -475,7 +475,7 @@ const Esteira = (() => {
      Sem foto do fundo vazio: o fundo é estimado pelas bordas da foto (até 3 cores),
      a peça é a região diferente disso que está no centro. Sem escala: compara
      contorno e proporção (altura/largura) com o catálogo. */
-  function analisarFoto(foto) {
+  function analisarFoto(foto, soRecorte) {
     const W = 160, H = Math.max(40, Math.round(foto.height * W / foto.width)), N = W * H;
     const c = document.createElement('canvas'); c.width = W; c.height = H;
     const ctx = c.getContext('2d', { willReadFrequently: true }); ctx.drawImage(foto, 0, 0, W, H);
@@ -485,7 +485,7 @@ const Esteira = (() => {
     // não tenha a mesma cor do vaso. Distância em Lab, com peso menor no claro/escuro (sombra no vaso).
     const LAB = new Float32Array(N * 3);
     for (let p = 0; p < N; p++) { const i = p * 4, l = rgb2lab(d[i], d[i + 1], d[i + 2]); LAB[p * 3] = l[0]; LAB[p * 3 + 1] = l[1]; LAB[p * 3 + 2] = l[2]; }
-    const dist = (p, c) => Math.sqrt(((LAB[p * 3] - c[0]) * 0.5) ** 2 + (LAB[p * 3 + 1] - c[1]) ** 2 + (LAB[p * 3 + 2] - c[2]) ** 2);
+    const dist = (p, c) => Math.sqrt(((LAB[p * 3] - c[0]) * 0.42) ** 2 + (LAB[p * 3 + 1] - c[1]) ** 2 + (LAB[p * 3 + 2] - c[2]) ** 2);
     const kmeans = (pts, k) => {
       if (!pts.length) return [];
       let cs = Array.from({ length: k }, (_, q) => { const p = pts[Math.floor((q + 0.5) * pts.length / k)]; return [LAB[p * 3], LAB[p * 3 + 1], LAB[p * 3 + 2]]; });
@@ -511,7 +511,7 @@ const Esteira = (() => {
       cV = cV.filter((_, q) => n[q] >= miolo.length * 0.15); }
     let cF = kmeans(borda, 5);
     // se a peça encosta na borda, uma cor do "fundo" é a própria peça: descarta
-    cF = cF.filter(c => cV.every(v => Math.hypot((c[0] - v[0]) * 0.5, c[1] - v[1], c[2] - v[2]) > 4));
+    cF = cF.filter(c => cV.every(v => Math.hypot((c[0] - v[0]) * 0.42, c[1] - v[1], c[2] - v[2]) > 4));
     const m = new Uint8Array(N), a = new Uint8Array(N), tmp = new Uint8Array(N);
     for (let p = 0; p < N; p++) {
       let dv = Infinity, df = Infinity;
@@ -562,7 +562,7 @@ const Esteira = (() => {
       if (x === 0 || y === 0 || x === W - 1 || y === H - 1 || lab[p - 1] !== melhor.id || lab[p + 1] !== melhor.id || lab[p - W] !== melhor.id || lab[p + W] !== melhor.id) { ov.data[p * 4] = 40; ov.data[p * 4 + 1] = 255; ov.data[p * 4 + 2] = 120; }
     }
     ctx.putImageData(ov, 0, 0);
-    return { obs, modelos: classificar(obs, false), conferencia: c, toca: obs.toca };
+    return { obs, modelos: soRecorte ? [] : classificar(obs, false), conferencia: c, toca: obs.toca, lab, id: melhor.id, W, H };
   }
 
   async function carregarSilReais() {
