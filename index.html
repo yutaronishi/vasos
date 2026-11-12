@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f5c4a">
+<title>Identificação de Vasos</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root{
+    --verde:#1f5c4a; --verde2:#2f7d65; --fundo:#f4f2ec; --card:#fff; --txt:#1d1d1b; --sub:#6b6b66;
+    --borda:#dedbd2; --ok:#2e7d32; --alerta:#b26a00; --erro:#c62828; --raio:12px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--fundo);color:var(--txt);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  body{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+  header.topo{position:sticky;top:0;z-index:5;background:var(--verde);color:#fff;display:flex;gap:6px;align-items:center;padding:10px 12px;flex-wrap:wrap}
+  header.topo b{font-size:18px;margin-right:auto}
+  .pill{font-size:12px;padding:3px 8px;border-radius:99px;background:rgba(255,255,255,.18);white-space:nowrap}
+  .pill.ok{background:#3c9a6e}.pill.alerta{background:#c98a1e}.pill.erro{background:#d9534f}
+  main{max-width:640px;margin:0 auto;padding:12px 16px}
+  .cam{margin-bottom:12px}
+  .vwrap{position:relative;width:min(100%, calc(52vh * .75));aspect-ratio:3/4;margin:0 auto;background:#111;border-radius:var(--raio);overflow:hidden}
+  .vwrap video{width:100%;height:100%;object-fit:cover;display:block}
+  .guia{position:absolute;left:10%;top:5%;right:10%;bottom:5%;border:2px dashed rgba(255,255,255,.75);border-radius:10px;pointer-events:none}
+  .amostra{position:absolute;left:35%;top:45%;width:30%;height:30%;border:2px solid #ffd54f;border-radius:6px;pointer-events:none}
+  .amostra::after{content:"cor";position:absolute;top:-20px;left:0;font-size:11px;color:#ffd54f}
+  .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .25s}
+  .flash.on{opacity:.8;transition:none}
+  .camerr{background:#fdecea;color:var(--erro);padding:10px;border-radius:var(--raio);margin-top:8px;font-size:14px}
+  h3{font-size:15px;margin:18px 0 8px;color:var(--verde)}
+  .card{background:var(--card);border:1px solid var(--borda);border-radius:var(--raio);padding:12px;margin-bottom:10px}
+  .bt{appearance:none;border:0;border-radius:var(--raio);background:var(--verde);color:#fff;font-size:16px;font-weight:600;padding:12px 16px;min-height:48px;cursor:pointer}
+  .bt:active{background:var(--verde2)} .bt:disabled{opacity:.45}
+  .bt.grande{width:100%;font-size:19px;min-height:60px}
+  .bt.sec{background:#e6e3da;color:var(--txt)} .bt.perigo{background:var(--erro)} .bt.peq{min-height:36px;padding:6px 10px;font-size:14px}
+  .linha{display:flex;gap:8px;align-items:center;flex-wrap:wrap} .linha>.bt{flex:1}
+  input[type=text],input[type=url],input[type=number],input[type=search],input[type=password],select{width:100%;font-size:16px;padding:11px 12px;border:1px solid var(--borda);border-radius:10px;background:#fff;color:var(--txt);min-height:46px}
+  label.campo{display:block;font-size:13px;color:var(--sub);margin:10px 0 4px}
+  label.chk{display:flex;gap:10px;align-items:center;margin:12px 0;font-size:15px} label.chk input{width:22px;height:22px}
+  .snap{display:flex;gap:12px;align-items:center} .snap img{width:96px;height:128px;object-fit:cover;border-radius:8px;background:#ddd}
+  .sw{display:inline-block;width:22px;height:22px;border-radius:6px;border:1px solid rgba(0,0,0,.2);vertical-align:middle;margin-right:6px;flex:none}
+  .sug{display:flex;gap:10px;align-items:center;width:100%;text-align:left;background:#fff;border:2px solid var(--borda);border-radius:var(--raio);padding:10px;margin-bottom:8px;font-size:15px;color:var(--txt);cursor:pointer}
+  .sug.sel{border-color:var(--verde);background:#eef6f2}
+  .sug .sku{font-weight:700;font-family:ui-monospace,monospace}
+  .sug small,.sub{color:var(--sub);font-size:13px}
+  .tag{font-size:11px;padding:2px 6px;border-radius:6px;background:#eee;color:#555;margin-left:4px}
+  .tag.enc{background:#fff3e0;color:var(--alerta)}
+  .lista{max-height:260px;overflow:auto;border:1px solid var(--borda);border-radius:10px;margin-top:6px;background:#fff}
+  .lista button{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid #eee;background:none;padding:10px 12px;font-size:14px;color:var(--txt);cursor:pointer}
+  .lista button:active{background:#eef6f2}
+  .vazio{color:var(--sub);font-size:14px;padding:10px 12px;margin:0}
+  .escolha{font-size:17px;padding:10px 12px;background:#eef6f2;border-radius:10px;margin:10px 0}
+  .escolha .sku{font-family:ui-monospace,monospace;font-weight:700;font-size:20px}
+  .qtd{display:flex;gap:8px;align-items:center} .qtd input{text-align:center;font-size:22px;font-weight:700} .qtd .bt{width:64px;font-size:24px}
+  .reg{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid #eee;font-size:14px}
+  .reg .sku{font-family:ui-monospace,monospace;font-weight:600}
+  .st{font-size:12px;padding:2px 8px;border-radius:99px;white-space:nowrap;align-self:center}
+  .st.pendente{background:#fff3e0;color:var(--alerta)} .st.enviado{background:#e8f5e9;color:var(--ok)}
+  .paleta{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px}
+  .paleta div{display:flex;align-items:center;font-size:13px;padding:6px;background:#fff;border:1px solid #eee;border-radius:8px}
+  details summary{cursor:pointer;color:var(--verde);font-weight:600;padding:8px 0}
+  nav.abas{position:fixed;left:0;right:0;bottom:0;display:flex;background:#fff;border-top:1px solid var(--borda);padding-bottom:env(safe-area-inset-bottom);z-index:6}
+  nav.abas button{flex:1;border:0;background:none;padding:10px 4px 12px;font-size:13px;color:var(--sub);cursor:pointer;min-height:60px}
+  nav.abas button span{display:block;font-size:20px;line-height:1.2}
+  nav.abas button.on{color:var(--verde);font-weight:700}
+  .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;font-size:15px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9;max-width:90vw}
+  .toast.on{opacity:.95}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<header class="topo">
+  <b>Vasos</b>
+  <span id="stModelo" class="pill">modelo…</span>
+  <span id="stRede" class="pill">…</span>
+  <span id="stFila" class="pill">fila 0</span>
+</header>
+
+<main>
+  <!-- Câmera (usada em Identificar e Cadastro) -->
+  <section id="cam" class="cam">
+    <div class="vwrap" id="vwrap">
+      <video id="video" playsinline muted autoplay></video>
+      <div class="guia"></div>
+      <div class="amostra"></div>
+      <div class="flash" id="flash"></div>
+    </div>
+    <div class="camerr" id="camErr" hidden></div>
+  </section>
+
+  <!-- IDENTIFICAR -->
+  <section id="tab-ident" class="tab">
+    <button id="btCapturar" class="bt grande">📷 Capturar</button>
+
+    <div id="resultado" hidden>
+      <h3>Leitura</h3>
+      <div class="card snap">
+        <img id="snapImg" alt="">
+        <div>
+          <div id="corLida"></div>
+          <div class="sub" id="modeloLido"></div>
+        </div>
+      </div>
+
+      <h3>Sugestões</h3>
+      <div id="sugestoes"></div>
+
+      <details id="corrigir">
+        <summary>Corrigir modelo / cor</summary>
+        <label class="campo">Modelo</label>
+        <input type="search" id="idBusca" placeholder="Buscar: código, linha, tamanho…" autocomplete="off">
+        <div class="lista" id="idLista"></div>
+        <label class="campo">Cor</label>
+        <select id="idCor"></select>
+      </details>
+
+      <div class="escolha" id="escolhaAtual">Nenhum SKU escolhido</div>
+
+      <label class="campo">Quantidade</label>
+      <div class="qtd">
+        <button class="bt sec" data-d="-1" type="button">−</button>
+        <input type="number" id="qtd" value="1" min="1" inputmode="numeric">
+        <button class="bt sec" data-d="1" type="button">+</button>
+      </div>
+
+      <label class="chk"><input type="checkbox" id="chkTreinar"> Usar esta foto para treinar o modelo</label>
+
+      <div class="linha">
+        <button id="btDescartar" class="bt sec" type="button">Descartar</button>
+        <button id="btRegistrar" class="bt" type="button">✔ Registrar</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- CADASTRO / TREINO -->
+  <section id="tab-cad" class="tab" hidden>
+    <h3>1. Escolha o modelo</h3>
+    <input type="search" id="cadBusca" placeholder="Buscar: código, linha, tamanho…" autocomplete="off">
+    <div class="lista" id="cadLista"></div>
+    <div class="escolha" id="cadSel">Nenhum modelo escolhido</div>
+
+    <h3>2. Fotografe</h3>
+    <div class="linha">
+      <button id="btCad1" class="bt" type="button">Capturar 1</button>
+      <button id="btCadRajada" class="bt" type="button">Rajada (10)</button>
+    </div>
+    <p class="sub">Use vasos de cores diferentes e gire a peça entre as fotos. Procure manter a mesma distância e a mesma luz que serão usadas na identificação. 15 a 20 fotos por modelo é um bom começo.</p>
+
+    <h3>Modelos treinados</h3>
+    <div id="listaTreinados" class="card"></div>
+
+    <h3>Calibrar cores</h3>
+    <div class="card">
+      <p class="sub" style="margin-top:0">Coloque um vaso da cor escolhida com a área amarela sobre o corpo da peça e capture. Repita algumas vezes por cor. Sem calibração, o app usa as cores do catálogo, que são só aproximadas.</p>
+      <select id="calCor"></select>
+      <div class="linha" style="margin-top:8px">
+        <button id="btCal" class="bt" type="button">Capturar cor</button>
+        <button id="btCalReset" class="bt sec" type="button">Apagar calibração</button>
+      </div>
+      <div class="paleta" id="paleta" style="margin-top:10px"></div>
+    </div>
+  </section>
+
+  <!-- FILA -->
+  <section id="tab-fila" class="tab" hidden>
+    <div class="card" id="filaResumo"></div>
+    <button id="btEnviar" class="bt grande" type="button">Enviar agora</button>
+    <h3>Últimos registros</h3>
+    <div class="card" id="filaLista"></div>
+  </section>
+
+  <!-- CONFIG -->
+  <section id="tab-cfg" class="tab" hidden>
+    <h3>Operador e envio</h3>
+    <div class="card">
+      <label class="campo">Operador (nome ou matrícula)</label>
+      <input type="text" id="cfgOperador" autocomplete="off">
+      <label class="campo">URL do Apps Script (termina em /exec)</label>
+      <input type="url" id="cfgUrl" placeholder="https://script.google.com/macros/s/…/exec">
+      <label class="campo">Token</label>
+      <input type="password" id="cfgToken" autocomplete="off">
+      <label class="chk"><input type="checkbox" id="cfgTreinar"> Marcar "usar para treinar" por padrão</label>
+      <div class="linha">
+        <button id="btTestar" class="bt sec" type="button">Testar conexão</button>
+        <button id="btSalvar" class="bt" type="button">Salvar</button>
+      </div>
+    </div>
+
+    <h3>Catálogo</h3>
+    <div class="card">
+      <div id="catInfo" class="sub"></div>
+      <label class="campo">Importar catálogo (JSON gerado pelo Gemini)</label>
+      <input type="file" id="catArq" accept=".json,application/json">
+      <button id="btCatReset" class="bt sec peq" type="button" style="margin-top:8px">Usar catálogo do servidor</button>
+    </div>
+
+    <h3>Treino (compartilhar entre celulares)</h3>
+    <div class="card">
+      <div id="treinoInfo" class="sub"></div>
+      <div class="linha" style="margin-top:8px">
+        <button id="btExportar" class="bt sec" type="button">Exportar treino</button>
+      </div>
+      <label class="campo">Importar treino (soma ao que já existe)</label>
+      <input type="file" id="treinoArq" accept=".json,application/json">
+    </div>
+
+    <h3>Avançado</h3>
+    <div class="card">
+      <label class="campo">URL do modelo MobileNet (vazio = padrão)</label>
+      <input type="url" id="cfgModelUrl" placeholder="padrão: MobileNet v2 1.0">
+      <div class="linha" style="margin-top:10px">
+        <button id="btApagarTreino" class="bt perigo peq" type="button">Apagar todo o treino</button>
+        <button id="btApagarFila" class="bt perigo peq" type="button">Apagar fila enviada</button>
+      </div>
+      <p class="sub" id="versaoInfo"></p>
+    </div>
+  </section>
+</main>
+
+<nav class="abas">
+  <button data-tab="ident" class="on"><span>📷</span>Identificar</button>
+  <button data-tab="cad"><span>🧠</span>Cadastro</button>
+  <button data-tab="fila"><span>📤</span>Fila</button>
+  <button data-tab="cfg"><span>⚙️</span>Config</button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js"></script>
+<script>
+'use strict';
+const VERSAO_APP = '0.1';
+
+/* =========================================================
+   Constantes
+   ========================================================= */
+// Cores de referência amostradas do catálogo 2026 (aproximadas — calibre na fábrica)
+const CORES_PADRAO = {
+  C:['Cimento','#b6b1a2'], R:['Mármore','#796f60'], E:['Chumbo','#1a2426'], K:['Café','#493b2f'],
+  G:['Grafite','#3b3a40'], B:['Off-White','#c8c6b8'], I:['Iron','#63696c'],
+  AC:['Aço Corten','#673e32'], PA:['Preto Ardósia','#6d6d6d'], CQ:['Cimento Queimado','#bec2c5'],
+  MA:['Macchiato','#a08f80'], TI:['Terracota Itália','#cd926d'], AV:['Azul','#1f3247'], VV:['Verde','#2d6e7a']
+};
+// Cores permitidas para "códigos para encomenda" (página 7 do catálogo)
+const CORES_ENCOMENDA = ['C','R','E','K','G','B','I','AC','PA','CQ','MA','TI'];
+// Áreas na tela (frações do quadro da câmera): guia do vaso e amostra de cor
+const GUIA = [0.10, 0.05, 0.90, 0.95];
+const AMOSTRA = [0.35, 0.45, 0.65, 0.75];
+const FOTO_MAX = 800;          // lado maior da foto enviada ao Drive (px)
+const LOTE_ENVIO = 4;          // registros por requisição
+const MANTER_ENVIADOS = 200;   // histórico local de enviados
+
+/* =========================================================
+   Utilidades
+   ========================================================= */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const norm = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const pct = p => Math.round(p * 100) + '%';
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const uuid = () => (crypto.randomUUID ? crypto.randomUUID() :
+  'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random()*16|0; return (c === 'x' ? r : (r&3|8)).toString(16); }));
+let toastT;
+function toast(msg, ms = 2200) { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), ms); }
+function vibrar() { try { navigator.vibrate && navigator.vibrate(40); } catch (_) {} }
+function f32ToB64(f) { const u = new Uint8Array(f.buffer, f.byteOffset, f.byteLength); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }
+function b64ToF32(b) { const s = atob(b); const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return new Float32Array(u.buffer); }
+function baixar(nome, texto) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([texto], {type:'application/json'})); a.download = nome; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
+function lerArquivo(f) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsText(f); }); }
+
+/* =========================================================
+   Configuração (localStorage)
+   ========================================================= */
+const CFG_PADRAO = { operador:'', url:'', token:'', treinar:true, modelUrl:'' };
+let cfg = { ...CFG_PADRAO };
+try { cfg = { ...CFG_PADRAO, ...JSON.parse(localStorage.getItem('vasos.cfg') || '{}') }; } catch (_) {}
+function salvarCfg() { try { localStorage.setItem('vasos.cfg', JSON.stringify(cfg)); } catch (_) {} }
+
+/* =========================================================
+   Banco local (IndexedDB)
+   ========================================================= */
+const DB = {
+  db: null,
+  abrir() {
+    return new Promise((res, rej) => {
+      const r = indexedDB.open('vasos', 1);
+      r.onupgradeneeded = () => {
+        const d = r.result;
+        d.createObjectStore('exemplos', { keyPath:'id', autoIncrement:true });
+        d.createObjectStore('fila', { keyPath:'id' });
+        d.createObjectStore('kv');
+      };
+      r.onsuccess = () => { this.db = r.result; res(); };
+      r.onerror = () => rej(r.error);
+    });
+  },
+  tx(store, modo, fn) {
+    return new Promise((res, rej) => {
+      const t = this.db.transaction(store, modo); const s = t.objectStore(store); let out;
+      const r = fn(s); if (r) r.onsuccess = () => { out = r.result; };
+      t.oncomplete = () => res(out); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+    });
+  },
+  todos(s) { return this.tx(s, 'readonly', st => st.getAll()); },
+  ler(s, k) { return this.tx(s, 'readonly', st => st.get(k)); },
+  gravar(s, v, k) { return this.tx(s, 'readwrite', st => k === undefined ? st.put(v) : st.put(v, k)); },
+  gravarVarios(s, arr) { return this.tx(s, 'readwrite', st => { arr.forEach(v => st.put(v)); }); },
+  apagar(s, k) { return this.tx(s, 'readwrite', st => st.delete(k)); },
+  apagarVarios(s, ks) { return this.tx(s, 'readwrite', st => { ks.forEach(k => st.delete(k)); }); },
+  limpar(s) { return this.tx(s, 'readwrite', st => st.clear()); }
+};
+
+/* =========================================================
+   Catálogo
+   Código: J + tipo(1) + linha(2) + cor(1-2) + tamanho   ex.: JVRLG45
+   "base" = código sem a cor                                ex.: JVRL45
+   ========================================================= */
+function baseDe(sku, cor) {
+  if (!cor) return sku;
+  if (sku.substr(4, cor.length) === cor) return sku.slice(0, 4) + sku.slice(4 + cor.length);
+  const i = sku.indexOf(cor, 4); return i > 0 ? sku.slice(0, i) + sku.slice(i + cor.length) : sku;
+}
+function skuDe(base, cor) { return base.slice(0, 4) + cor + base.slice(4); }
+
+const Cat = {
+  bases: new Map(), skus: new Map(), nomesCor: {}, fonte: '', nProdutos: 0,
+  carregar(json, fonte) {
+    if (!json || !Array.isArray(json.produtos)) throw new Error('JSON sem a lista "produtos"');
+    const bases = new Map(), skus = new Map(), nomes = {};
+    for (const p of json.produtos) {
+      if (!p || !p.sku) continue;
+      const sku = String(p.sku).trim().toUpperCase(), cor = String(p.cor_codigo || '').trim().toUpperCase();
+      const base = baseDe(sku, cor);
+      let b = bases.get(base);
+      if (!b) { b = { base, produto:p.produto || '', linha:p.linha_nome || '', tipo:p.tipo || '', tamanho:p.tamanho ?? '', largura:p.largura || '', altura:p.altura || '', cores:{}, encomenda:false }; bases.set(base, b); }
+      if (cor) b.cores[cor] = sku;
+      if (cor && p.cor_nome) nomes[cor] = p.cor_nome;
+      skus.set(sku, { ...p, sku, cor_codigo:cor, base });
+    }
+    for (const e of (json.codigos_encomenda || [])) {
+      const base = String(e.codigo || '').trim().toUpperCase(); if (!base) continue;
+      let b = bases.get(base);
+      if (!b) { b = { base, produto:e.produto || '', linha:'', tipo:base[1] || '', tamanho:(base.match(/\d+$/) || [''])[0], largura:'', altura:'', cores:{}, encomenda:true }; bases.set(base, b); }
+      b.encomenda = true;
+    }
+    this.bases = bases; this.skus = skus; this.nomesCor = nomes; this.fonte = fonte; this.nProdutos = skus.size;
+  },
+  nomeCor(c) { return this.nomesCor[c] || (CORES_PADRAO[c] ? CORES_PADRAO[c][0] : c); },
+  // cores possíveis para um modelo: em linha + (se aceitar encomenda) as cores da pág. 7
+  opcoesCor(base) {
+    const b = this.bases.get(base); if (!b) return [];
+    const out = Object.entries(b.cores).map(([cor, sku]) => ({ cor, sku, emLinha:true }));
+    if (b.encomenda) for (const cor of CORES_ENCOMENDA) if (!b.cores[cor]) out.push({ cor, sku:skuDe(base, cor), emLinha:false });
+    return out;
+  },
+  rotulo(base) { const b = this.bases.get(base); if (!b) return base; return `${b.produto || b.linha} · ${b.largura || b.tamanho}${b.altura ? ' × ' + b.altura : ''}`; },
+  buscar(q, max = 40) {
+    const termos = norm(q).split(/\s+/).filter(Boolean);
+    const out = [];
+    for (const b of this.bases.values()) {
+      const alvo = norm(`${b.base} ${b.produto} ${b.linha} ${b.tamanho} ${b.largura} ${b.altura}`);
+      if (termos.every(t => alvo.includes(t))) { out.push(b); if (out.length >= max) break; }
+    }
+    return out;
+  }
+};
+
+async function iniciarCatalogo() {
+  const salvo = await DB.ler('kv', 'catalogo');
+  if (salvo) { try { Cat.carregar(salvo.json, salvo.fonte); return; } catch (e) { console.warn(e); } }
+  try {
+    const r = await fetch('catalogo.json', { cache:'no-cache' });
+    if (r.ok) Cat.carregar(await r.json(), 'catalogo.json (servidor)');
+  } catch (e) { console.warn('catálogo', e); }
+}
+
+/* =========================================================
+   Câmera
+   ========================================================= */
+const video = $('#video'), vwrap = $('#vwrap');
+const Cam = {
+  stream: null,
+  async ligar() {
+    if (this.stream) return;
+    try {
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio:false, video:{ facingMode:{ ideal:'environment' }, width:{ ideal:1280 }, height:{ ideal:960 } } });
+      video.srcObject = this.stream; await video.play().catch(() => {});
+      $('#camErr').hidden = true;
+    } catch (e) {
+      this.stream = null;
+      $('#camErr').hidden = false;
+      $('#camErr').textContent = 'Não foi possível abrir a câmera (' + (e.name || e.message) + '). Verifique a permissão do navegador. O app precisa estar em HTTPS.';
+    }
+  },
+  desligar() { if (this.stream) { this.stream.getTracks().forEach(t => t.stop()); this.stream = null; video.srcObject = null; } },
+  pronta() { return !!this.stream && video.readyState >= 2 && video.videoWidth > 0; }
+};
+
+// Converte um retângulo em frações da tela para pixels do vídeo (o vídeo usa object-fit:cover)
+function rectVideo([fx0, fy0, fx1, fy1]) {
+  const W = vwrap.clientWidth, H = vwrap.clientHeight, vw = video.videoWidth, vh = video.videoHeight;
+  const s = Math.max(W / vw, H / vh), ox = (W - vw * s) / 2, oy = (H - vh * s) / 2;
+  let x0 = (fx0 * W - ox) / s, y0 = (fy0 * H - oy) / s, x1 = (fx1 * W - ox) / s, y1 = (fy1 * H - oy) / s;
+  x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(vw, x1); y1 = Math.min(vh, y1);
+  return { x:x0, y:y0, w:x1 - x0, h:y1 - y0 };
+}
+
+async function capturarQuadro() {
+  // a câmera pode estar acabando de ligar (troca de aba) — espera até 4 s
+  if (!Cam.stream) await Cam.ligar();
+  for (let i = 0; i < 40 && !Cam.pronta(); i++) await sleep(100);
+  if (!Cam.pronta()) throw new Error('Câmera não está pronta');
+  const fl = $('#flash'); fl.classList.add('on'); setTimeout(() => fl.classList.remove('on'), 60); vibrar();
+  // foto do vaso (área da guia)
+  const g = rectVideo(GUIA), k = Math.min(1, FOTO_MAX / Math.max(g.w, g.h));
+  const foto = document.createElement('canvas'); foto.width = Math.round(g.w * k); foto.height = Math.round(g.h * k);
+  foto.getContext('2d').drawImage(video, g.x, g.y, g.w, g.h, 0, 0, foto.width, foto.height);
+  // amostra de cor (área amarela)
+  const a = rectVideo(AMOSTRA), am = document.createElement('canvas'); am.width = 96; am.height = 96;
+  const ctx = am.getContext('2d', { willReadFrequently:true }); ctx.drawImage(video, a.x, a.y, a.w, a.h, 0, 0, 96, 96);
+  return { foto, cor: medirCor(ctx.getImageData(0, 0, 96, 96)) };
+}
+
+/* =========================================================
+   Cor (CIELAB) — mede a área amarela e compara com a paleta
+   ========================================================= */
+function lin(c) { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+function rgb2lab(r, g, b) {
+  const R = lin(r), G = lin(g), B = lin(b);
+  let x = (R * 0.4124 + G * 0.3576 + B * 0.1805) / 0.95047, y = R * 0.2126 + G * 0.7152 + B * 0.0722, z = (R * 0.0193 + G * 0.1192 + B * 0.9505) / 1.08883;
+  const f = t => t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116;
+  x = f(x); y = f(y); z = f(z);
+  return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
+}
+function hex2rgb(h) { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+function rgb2hex(r, g, b) { return '#' + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, '0')).join(''); }
+
+function medirCor(img) {
+  const d = img.data, px = [];
+  for (let i = 0; i < d.length; i += 4) { const lab = rgb2lab(d[i], d[i + 1], d[i + 2]); px.push([lab[0], lab[1], lab[2], d[i], d[i + 1], d[i + 2]]); }
+  px.sort((p, q) => p[0] - q[0]);
+  // descarta 10% mais escuros (sombra) e 10% mais claros (reflexo)
+  const ini = Math.floor(px.length * 0.1), fim = Math.ceil(px.length * 0.9), sel = px.slice(ini, fim);
+  const m = [0, 0, 0, 0, 0, 0]; sel.forEach(p => p.forEach((v, j) => m[j] += v)); m.forEach((_, j) => m[j] /= sel.length);
+  const s = Math.sqrt(sel.reduce((acc, p) => acc + (p[0] - m[0]) ** 2, 0) / sel.length); // textura / mesclado
+  return { L:m[0], a:m[1], b:m[2], s, hex:rgb2hex(m[3], m[4], m[5]) };
+}
+
+const Cores = {
+  refs: {},
+  async carregar() {
+    this.refs = {};
+    for (const [c, [nome, hex]] of Object.entries(CORES_PADRAO)) { const [L, a, b] = rgb2lab(...hex2rgb(hex)); this.refs[c] = { nome, L, a, b, s:null, hex, n:0 }; }
+    const cal = await DB.ler('kv', 'cores');
+    if (cal) for (const [c, r] of Object.entries(cal)) this.refs[c] = { ...(this.refs[c] || { nome:c }), ...r };
+  },
+  classificar(m, permitidas) {
+    const lista = Object.entries(this.refs).filter(([c]) => !permitidas || permitidas.includes(c)).map(([c, r]) => {
+      let d = Math.hypot(m.L - r.L, m.a - r.a, m.b - r.b);
+      if (r.s != null) d += 0.7 * Math.abs(m.s - r.s);
+      return { cor:c, d };
+    });
+    const w = lista.map(x => Math.exp(-x.d / 4)), tot = w.reduce((a, b) => a + b, 0) || 1;
+    return lista.map((x, i) => ({ ...x, p:w[i] / tot })).sort((a, b) => b.p - a.p);
+  },
+  async calibrar(cor, m) {
+    const r = this.refs[cor], n = r.n || 0;
+    const media = (v0, v1) => n ? (v0 * n + v1) / (n + 1) : v1;
+    this.refs[cor] = { ...r, L:media(r.L, m.L), a:media(r.a, m.a), b:media(r.b, m.b), s:media(r.s ?? m.s, m.s), hex:m.hex, n:n + 1 };
+    await this.salvar();
+  },
+  async apagar(cor) { await this.salvarSem(cor); await this.carregar(); },
+  async salvarSem(cor) { const cal = {}; for (const [c, r] of Object.entries(this.refs)) if (r.n > 0 && c !== cor) cal[c] = r; await DB.gravar('kv', cal, 'cores'); },
+  async salvar() { await this.salvarSem(null); }
+};
+
+/* =========================================================
+   Modelo (MobileNet → vetor) + vizinhos mais próximos
+   ========================================================= */
+const Modelo = {
+  net: null, id: '', erro: '',
+  async carregar() {
+    stModelo('carregando…', '');
+    try {
+      if (!window.tf || !window.mobilenet) throw new Error('bibliotecas não carregaram (sem internet no 1º acesso?)');
+      const opts = { version:2, alpha:1.0 };
+      if (cfg.modelUrl) opts.modelUrl = cfg.modelUrl;
+      this.net = await mobilenet.load(opts);
+      this.id = cfg.modelUrl || 'mobilenet_v2_1.0';
+      // aquece o modelo
+      const c = document.createElement('canvas'); c.width = c.height = 224; this.vetor(c);
+      this.erro = ''; stModelo('modelo ok', 'ok');
+    } catch (e) {
+      this.net = null; this.erro = e.message; stModelo('sem modelo', 'erro'); console.warn(e);
+    }
+  },
+  // Formato é o que importa aqui: converte para cinza para a cor não influenciar
+  vetor(canvas) {
+    const c = document.createElement('canvas'); c.width = c.height = 224;
+    const ctx = c.getContext('2d', { willReadFrequently:true });
+    ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, 224, 224);
+    const k = Math.min(224 / canvas.width, 224 / canvas.height), w = canvas.width * k, h = canvas.height * k;
+    ctx.drawImage(canvas, (224 - w) / 2, (224 - h) / 2, w, h);
+    const im = ctx.getImageData(0, 0, 224, 224), d = im.data;
+    for (let i = 0; i < d.length; i += 4) { const y = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; d[i] = d[i + 1] = d[i + 2] = y; }
+    ctx.putImageData(im, 0, 0);
+    return tf.tidy(() => { const t = this.net.infer(c, true).flatten(); return t.div(t.norm().add(1e-8)).dataSync().slice(); });
+  }
+};
+
+const Treino = {
+  ex: [],
+  async carregar() { const all = await DB.todos('exemplos'); this.ex = all.map(e => ({ id:e.id, base:e.base, v:new Float32Array(e.v) })); },
+  async adicionar(base, v) {
+    const id = await DB.gravar('exemplos', { base, v:v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength), ts:Date.now(), modelo:Modelo.id });
+    this.ex.push({ id, base, v });
+  },
+  contagem() { const c = {}; this.ex.forEach(e => c[e.base] = (c[e.base] || 0) + 1); return c; },
+  async apagarBase(base) { const ids = this.ex.filter(e => e.base === base).map(e => e.id); await DB.apagarVarios('exemplos', ids); this.ex = this.ex.filter(e => e.base !== base); },
+  // k vizinhos mais próximos (similaridade de cosseno) → probabilidade por modelo
+  prever(v, k = 7) {
+    if (!this.ex.length) return [];
+    const sims = this.ex.map(e => { let s = 0; const a = e.v; for (let i = 0; i < a.length; i++) s += a[i] * v[i]; return { base:e.base, s }; });
+    sims.sort((a, b) => b.s - a.s);
+    const votos = {}, melhor = {};
+    sims.slice(0, Math.min(k, sims.length)).forEach(t => { votos[t.base] = (votos[t.base] || 0) + Math.exp((t.s - 1) * 20); melhor[t.base] = Math.max(melhor[t.base] ?? -1, t.s); });
+    const tot = Object.values(votos).reduce((a, b) => a + b, 0) || 1;
+    return Object.entries(votos).map(([base, x]) => ({ base, p:x / tot, sim:melhor[base] })).sort((a, b) => b.p - a.p);
+  }
+};
+
+/* =========================================================
+   Identificar
+   ========================================================= */
+let cap = null;      // { foto, cor, vetor, modelos, cores, sugestoes }
+let atual = null;    // { base, cor, sku, emLinha }
+
+async function identificar() {
+  const btn = $('#btCapturar'); if (btn.disabled) return; btn.disabled = true;
+  try {
+    let q;
+    try { q = await capturarQuadro(); } catch (e) { toast(e.message); return; }
+    let vetor = null, modelos = [];
+    if (Modelo.net) { vetor = Modelo.vetor(q.foto); modelos = Treino.prever(vetor); }
+    const coresTodas = Cores.classificar(q.cor);
+    const pc = Object.fromEntries(coresTodas.map(c => [c.cor, c.p]));
+    const sug = [];
+    for (const m of modelos.slice(0, 5)) {
+      for (const o of Cat.opcoesCor(m.base)) {
+        const p = m.p * (pc[o.cor] || 0) * (o.emLinha ? 1 : 0.6);
+        sug.push({ ...o, base:m.base, p, pModelo:m.p, pCor:pc[o.cor] || 0 });
+      }
+    }
+    sug.sort((a, b) => b.p - a.p);
+    cap = { foto:q.foto, cor:q.cor, vetor, modelos, cores:coresTodas, sugestoes:sug.slice(0, 3) };
+    mostrarResultado();
+  } finally { btn.disabled = false; }
+}
+
+function mostrarResultado() {
+  $('#resultado').hidden = false;
+  $('#snapImg').src = cap.foto.toDataURL('image/jpeg', 0.6);
+  const c0 = cap.cores[0];
+  $('#corLida').innerHTML = `<span class="sw" style="background:${cap.cor.hex}"></span> Cor lida: <b>${esc(Cat.nomeCor(c0.cor))}</b> <small class="sub">(${pct(c0.p)})</small>`;
+  let txt;
+  if (!Modelo.net) txt = 'Modelo de formato não carregado — escolha o modelo manualmente.';
+  else if (!Treino.ex.length) txt = 'Nenhum modelo treinado ainda — escolha manualmente (e marque "usar para treinar").';
+  else if (cap.modelos[0]) txt = `Formato mais parecido: ${cap.modelos[0].base} (${pct(cap.modelos[0].p)}, semelhança ${cap.modelos[0].sim.toFixed(2)})`;
+  else txt = '';
+  $('#modeloLido').textContent = txt;
+
+  const box = $('#sugestoes');
+  if (!cap.sugestoes.length) {
+    box.innerHTML = '<p class="sub">Sem sugestões. Use "Corrigir modelo / cor".</p>';
+    $('#corrigir').open = true; definirAtual(null);
+  } else {
+    box.innerHTML = cap.sugestoes.map((s, i) => `
+      <button class="sug" data-i="${i}" type="button">
+        <span class="sw" style="background:${Cores.refs[s.cor]?.hex || '#ccc'}"></span>
+        <span style="flex:1"><span class="sku">${esc(s.sku)}</span>${s.emLinha ? '' : '<span class="tag enc">encomenda</span>'}<br>
+        <small>${esc(Cat.rotulo(s.base))} · ${esc(Cat.nomeCor(s.cor))}</small><br>
+        <small>modelo ${pct(s.pModelo)} · cor ${pct(s.pCor)}</small></span>
+      </button>`).join('');
+    $('#corrigir').open = false;
+    definirAtual(cap.sugestoes[0]);
+  }
+  $('#qtd').value = 1;
+  $('#chkTreinar').checked = !!cfg.treinar && !!cap.vetor;
+  $('#chkTreinar').disabled = !cap.vetor;
+  pickId.render();
+  $('#resultado').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+function definirAtual(s) {
+  atual = s ? { base:s.base, cor:s.cor, sku:s.sku, emLinha:s.emLinha } : null;
+  document.querySelectorAll('#sugestoes .sug').forEach(b => b.classList.toggle('sel', !!s && cap.sugestoes[b.dataset.i]?.sku === s.sku));
+  const el = $('#escolhaAtual');
+  if (!atual) { el.innerHTML = 'Nenhum SKU escolhido'; preencherCores(null); return; }
+  el.innerHTML = `<span class="sku">${esc(atual.sku)}</span>${atual.emLinha ? '' : '<span class="tag enc">encomenda</span>'}<br><small class="sub">${esc(Cat.rotulo(atual.base))} · ${esc(Cat.nomeCor(atual.cor))}</small>`;
+  preencherCores(atual.base, atual.cor);
+}
+
+function preencherCores(base, corSel) {
+  const sel = $('#idCor');
+  if (!base) { sel.innerHTML = '<option value="">— escolha o modelo primeiro —</option>'; return; }
+  const ops = Cat.opcoesCor(base);
+  sel.innerHTML = ops.map(o => `<option value="${o.cor}">${esc(Cat.nomeCor(o.cor))} — ${esc(o.sku)}${o.emLinha ? '' : ' (encomenda)'}</option>`).join('');
+  if (corSel) sel.value = corSel;
+}
+
+function escolherBaseManual(base) {
+  const ops = Cat.opcoesCor(base); if (!ops.length) { toast('Modelo sem cores no catálogo'); return; }
+  // pega a cor mais provável entre as possíveis para esse modelo
+  const ord = cap ? Cores.classificar(cap.cor, ops.map(o => o.cor)) : [];
+  const cor = ord[0]?.cor || ops[0].cor, o = ops.find(x => x.cor === cor);
+  definirAtual({ base, cor, sku:o.sku, emLinha:o.emLinha });
+}
+
+async function registrar() {
+  if (!cap) return;
+  if (!atual) { toast('Escolha um SKU'); return; }
+  if (!cfg.operador) { toast('Informe o operador em Config'); trocarAba('cfg'); $('#cfgOperador').focus(); return; }
+  const q = parseInt($('#qtd').value, 10);
+  if (!(q > 0)) { toast('Quantidade inválida'); return; }
+  const s0 = cap.sugestoes[0];
+  const rec = {
+    id: uuid(), ts: new Date().toISOString(), operador: cfg.operador,
+    sku: atual.sku, base: atual.base, cor: atual.cor, cor_nome: Cat.nomeCor(atual.cor),
+    produto: Cat.rotulo(atual.base), quantidade: q, encomenda: !atual.emLinha,
+    sugerido: s0 ? s0.sku : '', confianca: s0 ? Math.round(s0.pModelo * s0.pCor * 1000) / 1000 : null,
+    corrigido: s0 ? s0.sku !== atual.sku : true,
+    cor_medida: cap.cor.hex,
+    foto: cap.foto.toDataURL('image/jpeg', 0.75).split(',')[1],
+    dispositivo: (navigator.userAgentData?.platform || navigator.platform || '') + ' ' + (screen.width + 'x' + screen.height),
+    status: 'pendente'
+  };
+  await DB.gravar('fila', rec);
+  if ($('#chkTreinar').checked && cap.vetor) { await Treino.adicionar(atual.base, cap.vetor); renderTreinados(); }
+  toast('Registrado: ' + rec.sku + ' × ' + q);
+  descartar();
+  await atualizarFilaUI();
+  Fila.enviar();
+}
+
+function descartar() { cap = null; atual = null; $('#resultado').hidden = true; window.scrollTo({ top:0, behavior:'smooth' }); }
+
+/* =========================================================
+   Seletor de modelo (busca)
+   ========================================================= */
+function criarPicker(input, lista, aoEscolher) {
+  const render = () => {
+    if (!Cat.bases.size) { lista.innerHTML = '<p class="vazio">Catálogo não carregado (veja Config).</p>'; return; }
+    const itens = Cat.buscar(input.value);
+    lista.innerHTML = itens.map(b => `<button type="button" data-b="${esc(b.base)}"><b>${esc(b.base)}</b> — ${esc(Cat.rotulo(b.base))}</button>`).join('') || '<p class="vazio">Nada encontrado</p>';
+  };
+  input.addEventListener('input', render);
+  lista.addEventListener('click', e => { const bt = e.target.closest('button[data-b]'); if (bt) aoEscolher(bt.dataset.b); });
+  return { render };
+}
+const pickId = criarPicker($('#idBusca'), $('#idLista'), b => escolherBaseManual(b));
+
+/* =========================================================
+   Cadastro (treino) e calibração de cor
+   ========================================================= */
+let cadBase = null, ocupado = false;
+const pickCad = criarPicker($('#cadBusca'), $('#cadLista'), b => { cadBase = b; renderCadSel(); });
+
+function renderCadSel() {
+  const n = Treino.contagem()[cadBase] || 0;
+  $('#cadSel').innerHTML = cadBase ? `<b>${esc(cadBase)}</b> — ${esc(Cat.rotulo(cadBase))}<br><small class="sub">${n} foto(s) treinada(s)</small>` : 'Nenhum modelo escolhido';
+}
+
+async function cadastrar(qtd) {
+  if (ocupado) return;
+  if (!cadBase) { toast('Escolha o modelo primeiro'); return; }
+  if (!Modelo.net) { toast('Modelo de IA não carregado'); return; }
+  ocupado = true; $('#btCad1').disabled = $('#btCadRajada').disabled = true;
+  try {
+    for (let i = 0; i < qtd; i++) {
+      const q = await capturarQuadro();
+      await Treino.adicionar(cadBase, Modelo.vetor(q.foto));
+      renderCadSel();
+      if (qtd > 1) { toast(`Foto ${i + 1}/${qtd} — gire o vaso`, 500); await sleep(450); }
+    }
+    toast('Treino salvo'); renderTreinados();
+  } catch (e) { toast(e.message); }
+  finally { ocupado = false; $('#btCad1').disabled = $('#btCadRajada').disabled = false; }
+}
+
+function renderTreinados() {
+  const c = Treino.contagem(), ks = Object.keys(c).sort();
+  $('#listaTreinados').innerHTML = ks.length ? ks.map(b => `
+    <div class="reg"><span><span class="sku">${esc(b)}</span> <small class="sub">${esc(Cat.rotulo(b))}</small></span>
+    <span class="linha"><b>${c[b]}</b><button class="bt sec peq" data-del="${esc(b)}" type="button">apagar</button></span></div>`).join('')
+    : '<p class="vazio">Nenhum modelo treinado ainda.</p>';
+  $('#treinoInfo').textContent = `${Treino.ex.length} foto(s) de treino em ${ks.length} modelo(s).`;
+  renderCadSel();
+}
+
+function renderPaleta() {
+  const sel = $('#calCor'), v = sel.value;
+  sel.innerHTML = Object.keys(Cores.refs).map(c => `<option value="${c}">${esc(Cat.nomeCor(c))} (${c})</option>`).join('');
+  if (v) sel.value = v;
+  $('#paleta').innerHTML = Object.entries(Cores.refs).map(([c, r]) =>
+    `<div><span class="sw" style="background:${r.hex}"></span><span>${esc(Cat.nomeCor(c))}<br><small class="sub">${r.n ? 'calibrado (' + r.n + ')' : 'catálogo'}</small></span></div>`).join('');
+}
+
+async function calibrarCor() {
+  try { const q = await capturarQuadro(); const c = $('#calCor').value; await Cores.calibrar(c, q.cor); renderPaleta(); toast('Cor ' + Cat.nomeCor(c) + ' calibrada'); }
+  catch (e) { toast(e.message); }
+}
+
+/* =========================================================
+   Fila de envio (offline → Apps Script)
+   ========================================================= */
+const Fila = {
+  enviando: false, ultimoErro: '',
+  async enviar(manual = false) {
+    if (this.enviando) return;
+    if (!cfg.url) { if (manual) toast('Configure a URL do Apps Script'); return; }
+    if (!navigator.onLine) { if (manual) toast('Sem internet — fica na fila'); return; }
+    this.enviando = true; atualizarFilaUI();
+    let enviados = 0;
+    try {
+      const pend = (await DB.todos('fila')).filter(r => r.status !== 'enviado').sort((a, b) => a.ts.localeCompare(b.ts));
+      for (let i = 0; i < pend.length; i += LOTE_ENVIO) {
+        const lote = pend.slice(i, i + LOTE_ENVIO);
+        const body = JSON.stringify({ token:cfg.token, registros:lote.map(({ status, ...r }) => r) });
+        const resp = await fetch(cfg.url, { method:'POST', headers:{ 'Content-Type':'text/plain;charset=utf-8' }, body });
+        const j = await resp.json();
+        if (!j.ok) throw new Error(j.erro || 'resposta inválida');
+        const ok = new Set(j.recebidos || []);
+        const agora = new Date().toISOString();
+        lote.forEach(r => { if (ok.has(r.id)) { r.status = 'enviado'; r.enviado_em = agora; delete r.foto; enviados++; } });
+        await DB.gravarVarios('fila', lote);
+      }
+      this.ultimoErro = '';
+      if (manual) toast(enviados ? `${enviados} registro(s) enviado(s)` : 'Nada pendente');
+    } catch (e) {
+      this.ultimoErro = e.message; if (manual) toast('Erro no envio: ' + e.message, 4000);
+    } finally {
+      this.enviando = false; await this.podar(); await atualizarFilaUI();
+    }
+  },
+  async podar() {
+    const env = (await DB.todos('fila')).filter(r => r.status === 'enviado').sort((a, b) => b.ts.localeCompare(a.ts));
+    if (env.length > MANTER_ENVIADOS) await DB.apagarVarios('fila', env.slice(MANTER_ENVIADOS).map(r => r.id));
+  }
+};
+
+async function atualizarFilaUI() {
+  const todos = (await DB.todos('fila')).sort((a, b) => b.ts.localeCompare(a.ts));
+  const pend = todos.filter(r => r.status !== 'enviado').length;
+  const p = $('#stFila'); p.textContent = Fila.enviando ? 'enviando…' : 'fila ' + pend; p.className = 'pill ' + (pend ? 'alerta' : 'ok');
+  $('#filaResumo').innerHTML = `<b>${pend}</b> pendente(s) de envio.` +
+    (cfg.url ? '' : '<br><span style="color:var(--erro)">URL do Apps Script não configurada.</span>') +
+    (Fila.ultimoErro ? `<br><span style="color:var(--erro)">Último erro: ${esc(Fila.ultimoErro)}</span>` : '');
+  $('#filaLista').innerHTML = todos.slice(0, 50).map(r => {
+    const d = new Date(r.ts);
+    return `<div class="reg"><span><span class="sku">${esc(r.sku)}</span> × ${r.quantidade}<br><small class="sub">${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })} · ${esc(r.operador)}${r.corrigido ? ' · corrigido' : ''}</small></span><span class="st ${r.status}">${r.status}</span></div>`;
+  }).join('') || '<p class="vazio">Nenhum registro.</p>';
+}
+
+/* =========================================================
+   Exportar / importar treino
+   ========================================================= */
+async function exportarTreino() {
+  const cal = await DB.ler('kv', 'cores');
+  const dados = { app:'vasos', versao:1, modelo:Modelo.id || cfg.modelUrl || 'mobilenet_v2_1.0', criado:new Date().toISOString(),
+    exemplos:Treino.ex.map(e => ({ base:e.base, v:f32ToB64(e.v) })), cores:cal || {} };
+  baixar(`treino-vasos-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(dados));
+}
+async function importarTreino(arq) {
+  const d = JSON.parse(await lerArquivo(arq));
+  if (d.app !== 'vasos' || !Array.isArray(d.exemplos)) throw new Error('Arquivo de treino inválido');
+  const meu = Modelo.id || cfg.modelUrl || 'mobilenet_v2_1.0';
+  if (d.modelo && d.modelo !== meu && !confirm(`O treino foi feito com outro modelo (${d.modelo}). Importar mesmo assim?`)) return;
+  const recs = d.exemplos.map(e => { const v = b64ToF32(e.v); return { base:e.base, v:v.buffer, ts:Date.now(), modelo:d.modelo }; });
+  await DB.gravarVarios('exemplos', recs);
+  if (d.cores && Object.keys(d.cores).length && confirm('O arquivo também tem calibração de cores. Substituir a calibração deste celular?')) { await DB.gravar('kv', d.cores, 'cores'); await Cores.carregar(); renderPaleta(); }
+  await Treino.carregar(); renderTreinados();
+  toast(`${recs.length} foto(s) de treino importadas`);
+}
+
+/* =========================================================
+   Interface geral
+   ========================================================= */
+function stModelo(txt, cls) { const p = $('#stModelo'); p.textContent = txt; p.className = 'pill ' + (cls || ''); }
+function stRede() { const p = $('#stRede'); p.textContent = navigator.onLine ? 'online' : 'offline'; p.className = 'pill ' + (navigator.onLine ? 'ok' : 'alerta'); }
+
+let abaAtual = 'ident';
+function trocarAba(aba) {
+  abaAtual = aba;
+  document.querySelectorAll('nav.abas button').forEach(b => b.classList.toggle('on', b.dataset.tab === aba));
+  document.querySelectorAll('section.tab').forEach(s => s.hidden = s.id !== 'tab-' + aba);
+  const usaCam = aba === 'ident' || aba === 'cad';
+  $('#cam').hidden = !usaCam;
+  if (usaCam) Cam.ligar(); else Cam.desligar();
+  if (aba === 'cad') { pickCad.render(); renderTreinados(); renderPaleta(); }
+  if (aba === 'fila') atualizarFilaUI();
+  if (aba === 'cfg') preencherCfg();
+}
+
+function preencherCfg() {
+  $('#cfgOperador').value = cfg.operador; $('#cfgUrl').value = cfg.url; $('#cfgToken').value = cfg.token;
+  $('#cfgTreinar').checked = !!cfg.treinar; $('#cfgModelUrl').value = cfg.modelUrl;
+  $('#catInfo').textContent = Cat.bases.size ? `${Cat.nProdutos} SKUs em ${Cat.bases.size} modelos — fonte: ${Cat.fonte}` : 'Nenhum catálogo carregado.';
+  $('#versaoInfo').textContent = `App v${VERSAO_APP} · modelo: ${Modelo.net ? Modelo.id : 'não carregado' + (Modelo.erro ? ' (' + Modelo.erro + ')' : '')}`;
+  renderTreinados();
+}
+
+function ligarEventos() {
+  document.querySelectorAll('nav.abas button').forEach(b => b.addEventListener('click', () => trocarAba(b.dataset.tab)));
+  $('#btCapturar').addEventListener('click', identificar);
+  $('#sugestoes').addEventListener('click', e => { const b = e.target.closest('.sug'); if (b) definirAtual(cap.sugestoes[b.dataset.i]); });
+  $('#idCor').addEventListener('change', e => { if (!atual) return; const o = Cat.opcoesCor(atual.base).find(x => x.cor === e.target.value); if (o) definirAtual({ base:atual.base, ...o }); });
+  document.querySelectorAll('.qtd [data-d]').forEach(b => b.addEventListener('click', () => { const i = $('#qtd'); i.value = Math.max(1, (parseInt(i.value, 10) || 0) + Number(b.dataset.d)); }));
+  $('#btRegistrar').addEventListener('click', registrar);
+  $('#btDescartar').addEventListener('click', descartar);
+
+  $('#btCad1').addEventListener('click', () => cadastrar(1));
+  $('#btCadRajada').addEventListener('click', () => cadastrar(10));
+  $('#listaTreinados').addEventListener('click', async e => {
+    const b = e.target.closest('[data-del]'); if (!b) return;
+    if (confirm('Apagar as fotos de treino de ' + b.dataset.del + '?')) { await Treino.apagarBase(b.dataset.del); renderTreinados(); }
+  });
+  $('#btCal').addEventListener('click', calibrarCor);
+  $('#btCalReset').addEventListener('click', async () => { const c = $('#calCor').value; if (confirm('Apagar a calibração de ' + Cat.nomeCor(c) + '?')) { await Cores.apagar(c); renderPaleta(); } });
+
+  $('#btEnviar').addEventListener('click', () => Fila.enviar(true));
+
+  $('#btSalvar').addEventListener('click', () => {
+    const modeloMudou = cfg.modelUrl !== $('#cfgModelUrl').value.trim();
+    cfg.operador = $('#cfgOperador').value.trim(); cfg.url = $('#cfgUrl').value.trim(); cfg.token = $('#cfgToken').value;
+    cfg.treinar = $('#cfgTreinar').checked; cfg.modelUrl = $('#cfgModelUrl').value.trim();
+    salvarCfg(); toast('Configuração salva');
+    if (modeloMudou) Modelo.carregar();
+    atualizarFilaUI(); Fila.enviar();
+  });
+  $('#btTestar').addEventListener('click', async () => {
+    const url = $('#cfgUrl').value.trim(); if (!url) { toast('Informe a URL'); return; }
+    try { const r = await fetch(url); const j = await r.json(); toast(j.ok ? 'Conexão ok ✔' : 'Resposta inesperada'); }
+    catch (e) { toast('Falhou: ' + e.message, 4000); }
+  });
+  $('#catArq').addEventListener('change', async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try { const json = JSON.parse(await lerArquivo(f)); Cat.carregar(json, f.name); await DB.gravar('kv', { json, fonte:f.name }, 'catalogo'); toast('Catálogo importado'); preencherCfg(); }
+    catch (err) { toast('Erro no catálogo: ' + err.message, 4000); }
+    e.target.value = '';
+  });
+  $('#btCatReset').addEventListener('click', async () => { await DB.apagar('kv', 'catalogo'); Cat.bases = new Map(); await iniciarCatalogo(); preencherCfg(); toast('Catálogo recarregado'); });
+  $('#btExportar').addEventListener('click', exportarTreino);
+  $('#treinoArq').addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; try { await importarTreino(f); } catch (err) { toast(err.message, 4000); } e.target.value = ''; });
+  $('#btApagarTreino').addEventListener('click', async () => { if (confirm('Apagar TODAS as fotos de treino deste celular?')) { await DB.limpar('exemplos'); await Treino.carregar(); renderTreinados(); toast('Treino apagado'); } });
+  $('#btApagarFila').addEventListener('click', async () => { const env = (await DB.todos('fila')).filter(r => r.status === 'enviado'); await DB.apagarVarios('fila', env.map(r => r.id)); atualizarFilaUI(); toast('Histórico limpo'); });
+
+  window.addEventListener('online', () => { stRede(); Fila.enviar(); });
+  window.addEventListener('offline', stRede);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) Cam.desligar(); else if (abaAtual === 'ident' || abaAtual === 'cad') Cam.ligar(); });
+  setInterval(() => Fila.enviar(), 60000);
+}
+
+async function iniciar() {
+  stRede(); ligarEventos();
+  try { await DB.abrir(); } catch (e) { toast('Erro no armazenamento local: ' + e.message, 6000); return; }
+  try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (_) {}
+  await Promise.all([iniciarCatalogo(), Cores.carregar(), Treino.carregar()]);
+  await atualizarFilaUI();
+  trocarAba('ident');
+  Modelo.carregar();
+  Fila.enviar();
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW', e));
+}
+iniciar();
+</script>
+</body>
+</html>
