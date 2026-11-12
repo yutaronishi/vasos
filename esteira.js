@@ -25,6 +25,7 @@ const Esteira = (() => {
     contagem: {}, total: 0, ultimas: [],
     modoCal: null, escBase: null,
     perfis: new Map(), perfisCarregados: false,
+    silReais: new Map(),   // contornos de peças reais confirmadas (foto na mão): base -> [{p, asp}]
     fps: 0, nQuadros: 0, tFps: 0, ultimoEnvio: 0,
     wakeLock: null,
     cfg: { limiar: 60, minArea: 2, linha: 50, confMin: 50, registrar: true, sempreFoto: false, sombra: false, mascara: false }
@@ -62,7 +63,7 @@ const Esteira = (() => {
           for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (d[(y * W + x) * 4 + 3] > 128) { if (L[y] < 0) L[y] = x; R[y] = x; }
           let y0 = 0, y1 = H - 1; while (y0 < H && L[y0] < 0) y0++; while (y1 > y0 && L[y1] < 0) y1--;
           const larg = []; for (let y = y0; y <= y1; y++) larg.push(L[y] < 0 ? 0 : R[y] - L[y] + 1);
-          S.perfis.set(it.base, perfilDe(larg));
+          S.perfis.set(it.base, { p: perfilDe(larg), asp: larg.length / Math.max(1, ...larg) });   // asp = altura/largura na foto do catálogo
         } catch (_) { /* imagem com problema: segue sem silhueta */ }
       }
     } catch (e) { console.warn('silhuetas', e); }
@@ -136,8 +137,8 @@ const Esteira = (() => {
   }
 
   /* ---------- morfologia binária (janela quadrada, via somas) ---------- */
-  function morf(m, out, W, H, r, dilatar) {
-    const hor = S.tmp;
+  function morf(m, out, W, H, r, dilatar, tmp) {
+    const hor = tmp || S.tmp;
     for (let y = 0; y < H; y++) {
       let s = 0; const o = y * W;
       for (let x = -r; x <= r; x++) if (x >= 0 && x < W) s += m[o + x];
@@ -209,8 +210,9 @@ const Esteira = (() => {
   }
 
   /* ---------- medição de uma peça ---------- */
-  function observar(c, d, ganhos) {
-    const W = S.W, H = S.H, lab = S.lab, n = c.y1 - c.y0 + 1;
+  function observar(c, d, ganhos) { return observarEm(S.lab, S.W, S.H, c, d, ganhos); }
+  function observarEm(lab, W, H, c, d, ganhos) {
+    const n = c.y1 - c.y0 + 1;
     const L = new Int32Array(n).fill(-1), R = new Int32Array(n).fill(-1);
     for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) if (lab[y * W + x] === c.id) { const k = y - c.y0; if (L[k] < 0) L[k] = x; R[k] = x; }
     const larg = Array.from(L, (l, k) => l < 0 ? 0 : R[k] - l + 1);
@@ -235,13 +237,14 @@ const Esteira = (() => {
   }
 
   /* ---------- identificação: medidas + silhueta → modelo ---------- */
-  function classificar(o) {
-    const temEscala = S.escala > 0, res = [];
+  function classificar(o, usarEscala = true) {
+    const temEscala = usarEscala && S.escala > 0, res = [];
     const H = o.Hpx / S.escala, Wm = o.Wmax / S.escala, Wb = o.Wbase / S.escala;
     for (const b of Cat.bases.values()) {
       const dm = b.dim; if (!dm || !dm.alt) continue;
       // pesos: altura é a medida mais confiável numa vista lateral; a largura varia com o giro
       // da peça (quadrados mostram a diagonal) e a base quase nunca aparece inteira de lado
+      const pf = S.perfis.get(b.base);
       let s;
       if (temEscala) {
         const eH = Math.abs(H - dm.alt) / dm.alt;
@@ -249,12 +252,20 @@ const Esteira = (() => {
         const eB = dm.base.length ? Math.min(...dm.base.map(l => Math.abs(Wb - l) / l)) : 0;
         s = 2.0 * eH + 0.5 * eW + 0.1 * eB;
       } else {
-        const asp = o.Hpx / o.Wmax, aspC = dm.alt / (dm.larg[0] || dm.alt);
+        // sem escala: proporção altura/largura — de preferência a da foto do catálogo (mesmo ângulo de foto)
+        const asp = o.Hpx / o.Wmax, aspC = pf ? pf.asp : dm.alt / (dm.larg[0] || dm.alt);
         s = Math.abs(Math.log(asp / aspC));
       }
-      const pf = S.perfis.get(b.base);
-      if (pf) { let e = 0; for (let k = 0; k < EST_BINS; k++) e += Math.abs(pf[k] - o.perfil[k]); s += 3.0 * e / EST_BINS; }
-      else s += 0.15;   // sem silhueta no catálogo: penaliza um pouco
+      if (pf) { let e = 0; for (let k = 0; k < EST_BINS; k++) e += Math.abs(pf.p[k] - o.perfil[k]); s += 3.0 * e / EST_BINS; }
+      else s += temEscala ? 0.15 : 0.5;   // sem silhueta no catálogo: penaliza
+      // contornos reais já confirmados para esse modelo (mesmo ângulo de foto): vale o mais parecido
+      if (!temEscala && S.silReais.has(b.base)) {
+        for (const r of S.silReais.get(b.base)) {
+          let e = 0; for (let k = 0; k < EST_BINS; k++) e += Math.abs(r.p[k] - o.perfil[k]);
+          const sr = Math.abs(Math.log((o.Hpx / o.Wmax) / r.asp)) + 3.0 * e / EST_BINS;
+          if (sr < s) s = sr;
+        }
+      }
       res.push({ base: b.base, s });
     }
     res.sort((a, b) => a.s - b.s);
@@ -460,6 +471,89 @@ const Esteira = (() => {
     liga('estSombra', 'sombra'); liga('estMascara', 'mascara');
   }
 
+  /* ---------- foto avulsa (aba Identificar, celular na mão) ----------
+     Sem foto do fundo vazio: o fundo é estimado pelas bordas da foto (até 3 cores),
+     a peça é a região diferente disso que está no centro. Sem escala: compara
+     contorno e proporção (altura/largura) com o catálogo. */
+  function analisarFoto(foto) {
+    const W = 160, H = Math.max(40, Math.round(foto.height * W / foto.width)), N = W * H;
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const ctx = c.getContext('2d', { willReadFrequently: true }); ctx.drawImage(foto, 0, 0, W, H);
+    const d = ctx.getImageData(0, 0, W, H).data;
+    // amostras da borda (6%)
+    const bx = Math.max(2, Math.round(W * 0.06)), by = Math.max(2, Math.round(H * 0.06)), borda = [];
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (x >= bx && x < W - bx && y >= by && y < H - by) continue;
+      if ((x + y) % 2) continue; const i = (y * W + x) * 4; borda.push([d[i], d[i + 1], d[i + 2]]);
+    }
+    // k-means com 3 cores
+    let cent = [borda[0], borda[Math.floor(borda.length / 2)], borda[borda.length - 1]].map(v => v.slice());
+    const perto = v => { let bi = 0, bd = Infinity; cent.forEach((cc, k) => { const dd = (v[0] - cc[0]) ** 2 + (v[1] - cc[1]) ** 2 + (v[2] - cc[2]) ** 2; if (dd < bd) { bd = dd; bi = k; } }); return [bi, Math.sqrt(bd)]; };
+    for (let it = 0; it < 8; it++) {
+      const soma = cent.map(() => [0, 0, 0, 0]);
+      for (const v of borda) { const [k] = perto(v); soma[k][0] += v[0]; soma[k][1] += v[1]; soma[k][2] += v[2]; soma[k][3]++; }
+      cent = cent.map((cc, k) => soma[k][3] ? [soma[k][0] / soma[k][3], soma[k][1] / soma[k][3], soma[k][2] / soma[k][3]] : cc);
+    }
+    // só vale como fundo a cor que domina a borda (a peça pode encostar na borda, mas ocupa pouco dela)
+    const qtd = cent.map(() => 0); for (const v of borda) qtd[perto(v)[0]]++;
+    cent = cent.filter((_, k) => qtd[k] >= borda.length * 0.18);
+    if (!cent.length) return null;
+    const dists = borda.map(v => perto(v)[1]).filter(x => x < 60).sort((a, b) => a - b);
+    const lim = Math.max(28, (dists[Math.floor(dists.length * 0.9)] || 20) * 1.6);
+    // máscara
+    const m = new Uint8Array(N), a = new Uint8Array(N), tmp = new Uint8Array(N);
+    for (let p = 0; p < N; p++) { const i = p * 4; m[p] = perto([d[i], d[i + 1], d[i + 2]])[1] > lim ? 1 : 0; }
+    morf(m, a, W, H, 2, true, tmp); morf(a, m, W, H, 2, false, tmp);
+    morf(m, a, W, H, 1, false, tmp); morf(a, m, W, H, 1, true, tmp);
+    // componentes: fica com a maior que encosta no centro
+    const lab = new Int32Array(N), pilha = new Int32Array(N); let id = 0, melhor = null;
+    for (let p0 = 0; p0 < N; p0++) {
+      if (!m[p0] || lab[p0]) continue; id++;
+      let topo = 0, area = 0, x0 = W, x1 = 0, y0 = H, y1 = 0, centro = 0; pilha[topo++] = p0; lab[p0] = id;
+      while (topo) {
+        const p = pilha[--topo], x = p % W, y = (p / W) | 0; area++;
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        if (Math.abs(x - W / 2) < W * 0.15 && Math.abs(y - H / 2) < H * 0.15) centro++;
+        if (x > 0 && m[p - 1] && !lab[p - 1]) { lab[p - 1] = id; pilha[topo++] = p - 1; }
+        if (x < W - 1 && m[p + 1] && !lab[p + 1]) { lab[p + 1] = id; pilha[topo++] = p + 1; }
+        if (y > 0 && m[p - W] && !lab[p - W]) { lab[p - W] = id; pilha[topo++] = p - W; }
+        if (y < H - 1 && m[p + W] && !lab[p + W]) { lab[p + W] = id; pilha[topo++] = p + W; }
+      }
+      if (area > N * 0.03 && centro > 0 && (!melhor || area > melhor.area)) melhor = { id, area, x0, x1, y0, y1 };
+    }
+    if (!melhor) return null;
+    // preenche buracos da peça (ex.: boca aberta, reflexos)
+    for (let y = melhor.y0; y <= melhor.y1; y++) {
+      let l = -1, r = -1;
+      for (let x = melhor.x0; x <= melhor.x1; x++) if (lab[y * W + x] === melhor.id) { if (l < 0) l = x; r = x; }
+      if (l >= 0) for (let x = l; x <= r; x++) lab[y * W + x] = melhor.id;
+    }
+    const obs = observarEm(lab, W, H, melhor, d, [1, 1, 1]);
+    // imagem de conferência: peça destacada
+    const ov = ctx.getImageData(0, 0, W, H);
+    for (let p = 0; p < N; p++) if (lab[p] !== melhor.id) { ov.data[p * 4] *= 0.35; ov.data[p * 4 + 1] *= 0.35; ov.data[p * 4 + 2] *= 0.35; }
+    ctx.putImageData(ov, 0, 0);
+    return { obs, modelos: classificar(obs, false), conferencia: c, toca: obs.toca };
+  }
+
+  async function carregarSilReais() {
+    const lista = (await DB.ler('kv', 'silhuetas_mao')) || [];
+    S.silReais = new Map();
+    for (const r of lista) { if (!S.silReais.has(r.base)) S.silReais.set(r.base, []); S.silReais.get(r.base).push({ p: Float32Array.from(r.p), asp: r.asp }); }
+  }
+  async function adicionarSilhueta(base, obs) {
+    if (!S.silReais.has(base)) S.silReais.set(base, []);
+    const arr = S.silReais.get(base); arr.push({ p: Float32Array.from(obs.perfil), asp: obs.Hpx / obs.Wmax });
+    if (arr.length > 30) arr.shift();
+    const lista = []; for (const [b, rs] of S.silReais) for (const r of rs) lista.push({ base: b, p: Array.from(r.p), asp: r.asp });
+    await DB.gravar('kv', lista, 'silhuetas_mao');
+  }
+  async function apagarSilhuetas(base) {
+    if (base) S.silReais.delete(base); else S.silReais = new Map();
+    const lista = []; for (const [b, rs] of S.silReais) for (const r of rs) lista.push({ base: b, p: Array.from(r.p), asp: r.asp });
+    await DB.gravar('kv', lista, 'silhuetas_mao');
+  }
+
   async function init() {
     S.tela = $('#estTela'); S.tctx = S.tela.getContext('2d');
     for (let i = 0; i < 100 && !DB.db; i++) await sleep(50);   // espera o banco local abrir
@@ -480,10 +574,12 @@ const Esteira = (() => {
     document.addEventListener('visibilitychange', async () => { if (!document.hidden && S.rodando && 'wakeLock' in navigator) { try { S.wakeLock = await navigator.wakeLock.request('screen'); } catch (_) {} } });
     S.pick = pick;
     render(); renderCal(); renderPaleta(); status();
+    carregarPerfis(); carregarSilReais();
   }
 
   return {
-    S, init, classificar,
+    S, init, classificar, analisarFoto, carregarPerfis, adicionarSilhueta, apagarSilhuetas,
+    nSil(base) { return (S.silReais.get(base) || []).length; },
     aoTrocarAba(aba) {
       if (aba === 'est') { S.pick && S.pick.render(); renderPaleta(); renderCal(); carregarPerfis(); status(); }
       else if (S.rodando) parar();

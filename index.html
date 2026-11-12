@@ -136,7 +136,7 @@
         <button class="bt sec" data-d="1" type="button">+</button>
       </div>
 
-      <label class="chk"><input type="checkbox" id="chkTreinar"> Usar esta foto para treinar o modelo</label>
+      <label class="chk"><input type="checkbox" id="chkTreinar"> Guardar o contorno desta peça para acertar melhor da próxima vez</label>
 
       <div class="linha">
         <button id="btDescartar" class="bt sec" type="button">Descartar</button>
@@ -307,7 +307,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js"></script>
 <script>
 'use strict';
-const VERSAO_APP = '0.4';
+const VERSAO_APP = '0.5';
 
 /* =========================================================
    Constantes
@@ -641,34 +641,50 @@ async function identificar() {
   try {
     let q;
     try { q = await capturarQuadro(); } catch (e) { toast(e.message); return; }
-    let vetor = null, modelos = [];
-    if (Modelo.net) { vetor = Modelo.vetor(q.foto); modelos = Treino.prever(vetor); }
-    const coresTodas = Cores.classificar(q.cor);
-    const pc = Object.fromEntries(coresTodas.map(c => [c.cor, c.p]));
+    // 1) contorno + proporção comparados com o catálogo (mesmo motor da esteira, sem treino)
+    let sil = null;
+    try { if (window.Esteira) sil = Esteira.analisarFoto(q.foto); } catch (e) { console.warn('contorno', e); }
+    // 2) se houver fotos de treino, a IA também opina
+    let vetor = null, mk = [];
+    if (Modelo.net) { vetor = Modelo.vetor(q.foto); if (Treino.ex.length) mk = Treino.prever(vetor); }
+    const ms = sil ? sil.modelos : [];
+    const comb = {};
+    const peso = mk.length && ms.length ? 0.5 : 1;
+    for (const m of ms) comb[m.base] = (comb[m.base] || 0) + peso * m.p;
+    for (const m of mk) comb[m.base] = (comb[m.base] || 0) + peso * m.p;
+    const modelos = Object.entries(comb).map(([base, p]) => ({ base, p, sim: (mk.find(x => x.base === base) || {}).sim })).sort((a, b) => b.p - a.p);
+    // cor: do miolo da peça recortada; se não achou a peça, da área amarela
+    const cor = sil ? sil.obs.cor : q.cor;
+    const coresTodas = Cores.classificar(cor);
+    // o formato escolhe o modelo; a cor é escolhida entre as cores possíveis daquele modelo
     const sug = [];
-    for (const m of modelos.slice(0, 5)) {
-      for (const o of Cat.opcoesCor(m.base)) {
-        const pC = o.cor ? (pc[o.cor] || 0) : 1;   // produto sem cor no código
-        const p = m.p * pC * (o.emLinha ? 1 : 0.6);
-        sug.push({ ...o, base:m.base, p, pModelo:m.p, pCor:pC });
+    for (const m of modelos.slice(0, 6)) {
+      const ops = Cat.opcoesCor(m.base), possiveis = ops.map(o => o.cor).filter(Boolean);
+      const cl = possiveis.length ? Cores.classificar(cor, possiveis) : [];
+      const pc = Object.fromEntries(cl.map(c => [c.cor, c.p]));
+      for (const o of ops) {
+        const pC = o.cor ? (pc[o.cor] || 0) : 1;
+        sug.push({ ...o, base:m.base, pModelo:m.p, pCor:pC, p: m.p * (0.3 + 0.7 * pC) * (o.emLinha ? 1 : 0.8) });
       }
     }
     sug.sort((a, b) => b.p - a.p);
-    cap = { foto:q.foto, cor:q.cor, vetor, modelos, cores:coresTodas, sugestoes:sug.slice(0, 3) };
+    // não repetir o mesmo modelo nas 3 sugestões (mostra alternativas de formato/tamanho)
+    const vistos = new Set(), top = [];
+    for (const x of sug) { if (vistos.has(x.base)) continue; vistos.add(x.base); top.push(x); if (top.length === 3) break; }
+    cap = { foto:q.foto, cor, vetor, modelos, cores:coresTodas, sugestoes:top, sil };
     mostrarResultado();
   } finally { btn.disabled = false; }
 }
 
 function mostrarResultado() {
   $('#resultado').hidden = false;
-  $('#snapImg').src = cap.foto.toDataURL('image/jpeg', 0.6);
+  $('#snapImg').src = (cap.sil ? cap.sil.conferencia : cap.foto).toDataURL('image/jpeg', 0.7);
   const c0 = cap.cores[0];
   $('#corLida').innerHTML = `<span class="sw" style="background:${cap.cor.hex}"></span> Cor lida: <b>${esc(Cat.nomeCor(c0.cor))}</b> <small class="sub">(${pct(c0.p)})</small>`;
   let txt;
-  if (!Modelo.net) txt = 'Modelo de formato não carregado — escolha o modelo manualmente.';
-  else if (!Treino.ex.length) txt = 'Nenhum modelo treinado ainda — escolha manualmente (e marque "usar para treinar").';
+  if (!cap.sil && !cap.modelos.length) txt = 'Não consegui separar o vaso do fundo — afaste um pouco, centralize a peça e use um fundo liso. Ou escolha manualmente.';
   else if (cap.modelos[0]) {
-    txt = `Formato mais parecido: ${cap.modelos[0].base} (${pct(cap.modelos[0].p)}, semelhança ${cap.modelos[0].sim.toFixed(2)})`;
+    txt = `Contorno mais parecido: ${cap.modelos[0].base} (${pct(cap.modelos[0].p)})` + (cap.sil && cap.sil.toca ? ' — a peça encostou na borda, afaste um pouco' : '');
     const fam = cap.modelos[0].base.slice(0, 4);
     if (cap.modelos.slice(1, 4).some(m => m.base.slice(0, 4) === fam && m.p > 0.1)) txt += ' — confira o TAMANHO: esse formato existe em mais de uma medida.';
   }
@@ -691,8 +707,8 @@ function mostrarResultado() {
     definirAtual(cap.sugestoes[0]);
   }
   $('#qtd').value = 1;
-  $('#chkTreinar').checked = !!cfg.treinar && !!cap.vetor;
-  $('#chkTreinar').disabled = !cap.vetor;
+  $('#chkTreinar').checked = !!cfg.treinar && !!(cap.vetor || cap.sil);
+  $('#chkTreinar').disabled = !(cap.vetor || cap.sil);
   pickId.render();
   $('#resultado').scrollIntoView({ behavior:'smooth', block:'start' });
 }
@@ -741,7 +757,11 @@ async function registrar() {
     status: 'pendente'
   };
   await DB.gravar('fila', rec);
-  if ($('#chkTreinar').checked && cap.vetor) { await Treino.adicionar(atual.base, cap.vetor); renderTreinados(); }
+  if ($('#chkTreinar').checked) {
+    if (cap.sil && window.Esteira) await Esteira.adicionarSilhueta(atual.base, cap.sil.obs);   // contorno real (sem IA)
+    if (cap.vetor) await Treino.adicionar(atual.base, cap.vetor);                              // vetor da IA (se carregada)
+    renderTreinados();
+  }
   toast('Registrado: ' + rec.sku + ' × ' + q);
   descartar();
   await atualizarFilaUI();
@@ -773,18 +793,21 @@ const pickCad = criarPicker($('#cadBusca'), $('#cadLista'), b => { cadBase = b; 
 
 function renderCadSel() {
   const n = Treino.contagem()[cadBase] || 0;
-  $('#cadSel').innerHTML = cadBase ? `<b>${esc(cadBase)}</b> — ${esc(Cat.rotulo(cadBase))}<br><small class="sub">${n} foto(s) treinada(s)</small>` : 'Nenhum modelo escolhido';
+  const ns = window.Esteira ? Esteira.nSil(cadBase) : 0;
+  $('#cadSel').innerHTML = cadBase ? `<b>${esc(cadBase)}</b> — ${esc(Cat.rotulo(cadBase))}<br><small class="sub">${ns} contorno(s) real(is) · ${n} foto(s) para a IA</small>` : 'Nenhum modelo escolhido';
 }
 
 async function cadastrar(qtd) {
   if (ocupado) return;
   if (!cadBase) { toast('Escolha o modelo primeiro'); return; }
-  if (!Modelo.net) { toast('Modelo de IA não carregado'); return; }
   ocupado = true; $('#btCad1').disabled = $('#btCadRajada').disabled = true;
   try {
     for (let i = 0; i < qtd; i++) {
       const q = await capturarQuadro();
-      await Treino.adicionar(cadBase, Modelo.vetor(q.foto));
+      const sil = window.Esteira ? Esteira.analisarFoto(q.foto) : null;
+      if (sil) await Esteira.adicionarSilhueta(cadBase, sil.obs);
+      if (Modelo.net) await Treino.adicionar(cadBase, Modelo.vetor(q.foto));
+      if (!sil && !Modelo.net) throw new Error('Não achei o vaso na foto — use fundo liso e centralize');
       renderCadSel();
       if (qtd > 1) { toast(`Foto ${i + 1}/${qtd} — gire o vaso`, 500); await sleep(450); }
     }
@@ -794,10 +817,12 @@ async function cadastrar(qtd) {
 }
 
 function renderTreinados() {
-  const c = Treino.contagem(), ks = Object.keys(c).sort();
+  const c = Treino.contagem(), sil = window.Esteira ? Esteira.S.silReais : new Map();
+  const ks = [...new Set([...Object.keys(c), ...sil.keys()])].sort();
   $('#listaTreinados').innerHTML = ks.length ? ks.map(b => `
-    <div class="reg"><span><span class="sku">${esc(b)}</span> <small class="sub">${esc(Cat.rotulo(b))}</small></span>
-    <span class="linha"><b>${c[b]}</b><button class="bt sec peq" data-del="${esc(b)}" type="button">apagar</button></span></div>`).join('')
+    <div class="reg"><span><span class="sku">${esc(b)}</span> <small class="sub">${esc(Cat.rotulo(b))}</small><br>
+    <small class="sub">${(sil.get(b) || []).length} contorno(s) · ${c[b] || 0} p/ IA</small></span>
+    <span class="linha"><button class="bt sec peq" data-del="${esc(b)}" type="button">apagar</button></span></div>`).join('')
     : '<p class="vazio">Nenhum modelo treinado ainda.</p>';
   const nCat = Treino.ex.filter(e => e.origem === 'catalogo').length;
   $('#treinoInfo').textContent = `${Treino.ex.length} exemplo(s) de treino em ${ks.length} modelo(s) — ${nCat} do catálogo, ${Treino.ex.length - nCat} de fotos reais.`;
@@ -990,7 +1015,7 @@ function ligarEventos() {
   $('#btApagarCat').addEventListener('click', async () => { if (confirm('Apagar o treino feito com as fotos do catálogo? (fotos reais ficam)')) { const n = await Treino.apagarOrigem('catalogo'); renderTreinados(); toast(n + ' variações apagadas'); } });
   $('#listaTreinados').addEventListener('click', async e => {
     const b = e.target.closest('[data-del]'); if (!b) return;
-    if (confirm('Apagar as fotos de treino de ' + b.dataset.del + '?')) { await Treino.apagarBase(b.dataset.del); renderTreinados(); }
+    if (confirm('Apagar as fotos de treino e contornos de ' + b.dataset.del + '?')) { await Treino.apagarBase(b.dataset.del); if (window.Esteira) await Esteira.apagarSilhuetas(b.dataset.del); renderTreinados(); }
   });
   $('#btCal').addEventListener('click', calibrarCor);
   $('#btCalReset').addEventListener('click', async () => { const c = $('#calCor').value; if (confirm('Apagar a calibração de ' + Cat.nomeCor(c) + '?')) { await Cores.apagar(c); renderPaleta(); } });
@@ -1019,7 +1044,7 @@ function ligarEventos() {
   $('#btCatReset').addEventListener('click', async () => { await DB.apagar('kv', 'catalogo'); Cat.bases = new Map(); await iniciarCatalogo(); preencherCfg(); toast('Catálogo recarregado'); });
   $('#btExportar').addEventListener('click', exportarTreino);
   $('#treinoArq').addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; try { await importarTreino(f); } catch (err) { toast(err.message, 4000); } e.target.value = ''; });
-  $('#btApagarTreino').addEventListener('click', async () => { if (confirm('Apagar TODAS as fotos de treino deste celular?')) { await DB.limpar('exemplos'); await Treino.carregar(); renderTreinados(); toast('Treino apagado'); } });
+  $('#btApagarTreino').addEventListener('click', async () => { if (confirm('Apagar TODAS as fotos de treino e contornos deste celular?')) { await DB.limpar('exemplos'); if (window.Esteira) await Esteira.apagarSilhuetas(); await Treino.carregar(); renderTreinados(); toast('Treino apagado'); } });
   $('#btApagarFila').addEventListener('click', async () => { const env = (await DB.todos('fila')).filter(r => r.status === 'enviado'); await DB.apagarVarios('fila', env.map(r => r.id)); atualizarFilaUI(); toast('Histórico limpo'); });
 
   window.addEventListener('online', () => { stRede(); Fila.enviar(); });
