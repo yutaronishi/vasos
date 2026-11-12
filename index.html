@@ -68,6 +68,15 @@
   nav.abas button.on{color:var(--verde);font-weight:700}
   .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;font-size:15px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9;max-width:90vw}
   .toast.on{opacity:.95}
+  .estwrap{background:#111;border-radius:var(--raio);overflow:hidden}
+  .estwrap canvas{display:block;width:100%;height:auto}
+  .contador{display:flex;justify-content:space-between;align-items:center;font-size:16px;margin-top:10px}
+  .contador b{font-size:34px;color:var(--verde);margin-right:4px}
+  .peca{display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid #eee;font-size:13px}
+  .peca img{width:56px;height:56px;object-fit:contain;background:#eee;border-radius:6px;flex:none}
+  .tag.rev{background:#fdecea;color:var(--erro)}
+  input[type=range]{width:100%}
+  .cam.vivo-oculto{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
   [hidden]{display:none!important}
 </style>
 </head>
@@ -138,6 +147,16 @@
 
   <!-- CADASTRO / TREINO -->
   <section id="tab-cad" class="tab" hidden>
+    <h3>Treino inicial com o catálogo</h3>
+    <div class="card">
+      <p class="sub" style="margin-top:0">Usa as fotos dos produtos do catálogo 2026 (cerca de 140 modelos) para dar um ponto de partida ao reconhecimento. Gera variações de cada foto (fundo, giro, tamanho, luz). Leva 1 a 3 minutos e só precisa ser feito uma vez por celular. Depois, as fotos reais confirmadas no dia a dia vão melhorando o acerto.</p>
+      <div class="linha">
+        <button id="btTreinoCat" class="bt" type="button">Treinar com o catálogo</button>
+        <button id="btApagarCat" class="bt sec peq" type="button">Apagar treino do catálogo</button>
+      </div>
+      <div id="progCat" class="sub" style="margin-top:8px"></div>
+    </div>
+
     <h3>1. Escolha o modelo</h3>
     <input type="search" id="cadBusca" placeholder="Buscar: código, linha, tamanho…" autocomplete="off">
     <div class="lista" id="cadLista"></div>
@@ -151,7 +170,7 @@
     <p class="sub">Use vasos de cores diferentes e gire a peça entre as fotos. Procure manter a mesma distância e a mesma luz que serão usadas na identificação. 15 a 20 fotos por modelo é um bom começo.</p>
 
     <h3>Modelos treinados</h3>
-    <div id="listaTreinados" class="card"></div>
+    <div id="listaTreinados" class="card" style="max-height:320px;overflow:auto"></div>
 
     <h3>Calibrar cores</h3>
     <div class="card">
@@ -162,6 +181,59 @@
         <button id="btCalReset" class="bt sec" type="button">Apagar calibração</button>
       </div>
       <div class="paleta" id="paleta" style="margin-top:10px"></div>
+    </div>
+  </section>
+
+  <!-- ESTEIRA (fluxo contínuo) -->
+  <section id="tab-est" class="tab" hidden>
+    <div class="estwrap"><canvas id="estTela" width="640" height="360"></canvas></div>
+    <div class="linha" style="margin-top:8px">
+      <button id="estIniciar" class="bt" type="button">▶ Iniciar</button>
+      <button id="estFundo" class="bt sec" type="button">Calibrar fundo</button>
+    </div>
+    <div id="estStatus" class="sub" style="margin-top:6px"></div>
+
+    <div class="card contador">
+      <div><b id="estTotal">0</b> peça(s) contada(s)</div>
+      <button id="estZerar" class="bt sec peq" type="button">Zerar</button>
+    </div>
+    <h3>Contagem por SKU</h3>
+    <div id="estContagem" class="card"></div>
+    <h3>Últimas peças</h3>
+    <div id="estUltimas" class="card"></div>
+
+    <h3>Calibração</h3>
+    <div class="card">
+      <p class="sub" style="margin-top:0"><b>1. Fundo:</b> com a esteira vazia, toque em "Calibrar fundo".<br>
+      <b>2. Escala:</b> escolha o modelo de uma peça conhecida, toque em "Próxima peça calibra a escala" e passe essa peça pela linha.<br>
+      <b>3. Cores:</b> escolha a cor, toque em "Próxima peça calibra a cor" e passe uma peça dessa cor. Repita 2 ou 3 vezes por cor.</p>
+      <label class="campo">Modelo da peça de referência (escala)</label>
+      <input type="search" id="estEscBusca" placeholder="Buscar: código, linha, tamanho…" autocomplete="off">
+      <div class="lista" id="estEscLista" style="max-height:160px"></div>
+      <div class="escolha" id="estEscSel">Nenhum modelo escolhido</div>
+      <button id="estEscala" class="bt" type="button" style="width:100%">Próxima peça calibra a escala</button>
+      <label class="campo">Cor da peça de referência</label>
+      <select id="estCalCor"></select>
+      <button id="estCor" class="bt" type="button" style="width:100%;margin-top:8px">Próxima peça calibra a cor</button>
+      <div id="estCalInfo" class="sub" style="margin-top:8px"></div>
+      <div class="paleta" id="estPaleta" style="margin-top:10px"></div>
+    </div>
+
+    <h3>Ajustes</h3>
+    <div class="card">
+      <label class="campo">Sensibilidade — diferença mínima do fundo: <b id="estLimiarV"></b></label>
+      <input type="range" id="estLimiar" min="15" max="160" step="5">
+      <label class="campo">Tamanho mínimo da peça (% da imagem): <b id="estMinAreaV"></b></label>
+      <input type="range" id="estMinArea" min="0.5" max="15" step="0.5">
+      <label class="campo">Posição da linha de contagem (% da largura): <b id="estLinhaV"></b></label>
+      <input type="range" id="estLinha" min="20" max="80" step="5">
+      <label class="campo">Confiança mínima — abaixo disso marca "revisar" e envia foto: <b id="estConfMinV"></b></label>
+      <input type="range" id="estConfMin" min="5" max="95" step="5">
+      <label class="chk"><input type="checkbox" id="estRegistrar"> Registrar cada peça na planilha</label>
+      <label class="chk"><input type="checkbox" id="estSempreFoto"> Enviar foto de todas as peças (consome mais dados)</label>
+      <label class="chk"><input type="checkbox" id="estSombra"> Ignorar sombras</label>
+      <label class="chk"><input type="checkbox" id="estMascara"> Mostrar o que o app enxerga como peça (vermelho)</label>
+      <button id="estTravar" class="bt sec peq" type="button">Travar exposição/branco da câmera</button>
     </div>
   </section>
 
@@ -223,6 +295,7 @@
 
 <nav class="abas">
   <button data-tab="ident" class="on"><span>📷</span>Identificar</button>
+  <button data-tab="est"><span>🏭</span>Esteira</button>
   <button data-tab="cad"><span>🧠</span>Cadastro</button>
   <button data-tab="fila"><span>📤</span>Fila</button>
   <button data-tab="cfg"><span>⚙️</span>Config</button>
@@ -234,7 +307,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js"></script>
 <script>
 'use strict';
-const VERSAO_APP = '0.1';
+const VERSAO_APP = '0.4';
 
 /* =========================================================
    Constantes
@@ -329,33 +402,51 @@ function skuDe(base, cor) { return base.slice(0, 4) + cor + base.slice(4); }
 
 const Cat = {
   bases: new Map(), skus: new Map(), nomesCor: {}, fonte: '', nProdutos: 0,
+  // Aceita os dois formatos: { skus:[...] } (gerado pelo Gemini) ou { produtos:[...], codigos_encomenda:[...] }
   carregar(json, fonte) {
-    if (!json || !Array.isArray(json.produtos)) throw new Error('JSON sem a lista "produtos"');
+    const lista = json && (Array.isArray(json.skus) ? json.skus : Array.isArray(json.produtos) ? json.produtos : null);
+    if (!lista) throw new Error('JSON sem a lista "skus" ou "produtos"');
+    const nums = v => typeof v === 'number' ? [v] : (String(v ?? '').replace(/,/g, '.').match(/\d+(\.\d+)?/g) || []).map(Number);
+    const medida = (txt, num) => txt || (num !== undefined && num !== null && num !== '' ? String(num).replace('.', ',') + ' cm' : '');
     const bases = new Map(), skus = new Map(), nomes = {};
-    for (const p of json.produtos) {
+    for (const c of [...(json.cores_encomenda || []), ...(json.cores_studio || [])]) if (c && c.codigo && c.nome) nomes[c.codigo] = c.nome;
+    for (const p of lista) {
       if (!p || !p.sku) continue;
       const sku = String(p.sku).trim().toUpperCase(), cor = String(p.cor_codigo || '').trim().toUpperCase();
-      const base = baseDe(sku, cor);
+      const emLinha = p.em_linha !== false;
+      const base = String(p.codigo_encomenda || '').trim().toUpperCase() || baseDe(sku, cor);
       let b = bases.get(base);
-      if (!b) { b = { base, produto:p.produto || '', linha:p.linha_nome || '', tipo:p.tipo || '', tamanho:p.tamanho ?? '', largura:p.largura || '', altura:p.altura || '', cores:{}, encomenda:false }; bases.set(base, b); }
-      if (cor) b.cores[cor] = sku;
+      if (!b) {
+        b = { base, produto:p.produto || '', linha:p.linha_nome || p.linha || '', tipo:p.tipo || '',
+              tamanho:p.tamanho ?? ((base.match(/\d+[A-Z]?$/) || [''])[0]),
+              largura:medida(p.largura, p.largura_cm), altura:medida(p.altura, p.altura_cm),
+              dim:{ alt:nums(p.altura_cm ?? p.altura)[0] || 0, larg:nums(p.largura_cm ?? p.largura), boca:nums(p.boca_cm ?? p.boca), base:nums(p.base_cm ?? p.base) },
+              cores:{}, coresEnc:{}, semCor:'', gerarEnc:false };
+        bases.set(base, b);
+      }
+      if (!cor) b.semCor = sku;
+      else if (emLinha) b.cores[cor] = sku;
+      else b.coresEnc[cor] = sku;
       if (cor && p.cor_nome) nomes[cor] = p.cor_nome;
       skus.set(sku, { ...p, sku, cor_codigo:cor, base });
     }
+    // formato antigo: códigos para encomenda sem cor → app gera as cores da pág. 7
     for (const e of (json.codigos_encomenda || [])) {
       const base = String(e.codigo || '').trim().toUpperCase(); if (!base) continue;
       let b = bases.get(base);
-      if (!b) { b = { base, produto:e.produto || '', linha:'', tipo:base[1] || '', tamanho:(base.match(/\d+$/) || [''])[0], largura:'', altura:'', cores:{}, encomenda:true }; bases.set(base, b); }
-      b.encomenda = true;
+      if (!b) { b = { base, produto:e.produto || '', linha:'', tipo:base[1] || '', tamanho:(base.match(/\d+$/) || [''])[0], largura:'', altura:'', cores:{}, coresEnc:{}, semCor:'', gerarEnc:true }; bases.set(base, b); }
+      b.gerarEnc = true;
     }
     this.bases = bases; this.skus = skus; this.nomesCor = nomes; this.fonte = fonte; this.nProdutos = skus.size;
   },
-  nomeCor(c) { return this.nomesCor[c] || (CORES_PADRAO[c] ? CORES_PADRAO[c][0] : c); },
-  // cores possíveis para um modelo: em linha + (se aceitar encomenda) as cores da pág. 7
+  nomeCor(c) { return c ? (this.nomesCor[c] || (CORES_PADRAO[c] ? CORES_PADRAO[c][0] : c)) : 'sem cor no código'; },
+  // cores possíveis para um modelo: em linha + encomenda
   opcoesCor(base) {
     const b = this.bases.get(base); if (!b) return [];
     const out = Object.entries(b.cores).map(([cor, sku]) => ({ cor, sku, emLinha:true }));
-    if (b.encomenda) for (const cor of CORES_ENCOMENDA) if (!b.cores[cor]) out.push({ cor, sku:skuDe(base, cor), emLinha:false });
+    for (const [cor, sku] of Object.entries(b.coresEnc)) if (!b.cores[cor]) out.push({ cor, sku, emLinha:false });
+    if (b.gerarEnc) for (const cor of CORES_ENCOMENDA) if (!b.cores[cor] && !b.coresEnc[cor]) out.push({ cor, sku:skuDe(base, cor), emLinha:false });
+    if (b.semCor) out.push({ cor:'', sku:b.semCor, emLinha:true });
     return out;
   },
   rotulo(base) { const b = this.bases.get(base); if (!b) return base; return `${b.produto || b.linha} · ${b.largura || b.tamanho}${b.altura ? ' × ' + b.altura : ''}`; },
@@ -515,11 +606,16 @@ const Modelo = {
 
 const Treino = {
   ex: [],
-  async carregar() { const all = await DB.todos('exemplos'); this.ex = all.map(e => ({ id:e.id, base:e.base, v:new Float32Array(e.v) })); },
-  async adicionar(base, v) {
-    const id = await DB.gravar('exemplos', { base, v:v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength), ts:Date.now(), modelo:Modelo.id });
-    this.ex.push({ id, base, v });
+  async carregar() { const all = await DB.todos('exemplos'); this.ex = all.map(e => ({ id:e.id, base:e.base, v:new Float32Array(e.v), origem:e.origem || 'foto' })); },
+  async adicionar(base, v, origem = 'foto') {
+    const id = await DB.gravar('exemplos', { base, v:v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength), ts:Date.now(), modelo:Modelo.id, origem });
+    this.ex.push({ id, base, v, origem });
   },
+  async adicionarVarios(lista) {   // [{base, v, origem}] numa transação só
+    const recs = lista.map(x => ({ base:x.base, v:x.v.buffer.slice(x.v.byteOffset, x.v.byteOffset + x.v.byteLength), ts:Date.now(), modelo:Modelo.id, origem:x.origem }));
+    await DB.gravarVarios('exemplos', recs);
+  },
+  async apagarOrigem(origem) { const ids = this.ex.filter(e => e.origem === origem).map(e => e.id); await DB.apagarVarios('exemplos', ids); this.ex = this.ex.filter(e => e.origem !== origem); return ids.length; },
   contagem() { const c = {}; this.ex.forEach(e => c[e.base] = (c[e.base] || 0) + 1); return c; },
   async apagarBase(base) { const ids = this.ex.filter(e => e.base === base).map(e => e.id); await DB.apagarVarios('exemplos', ids); this.ex = this.ex.filter(e => e.base !== base); },
   // k vizinhos mais próximos (similaridade de cosseno) → probabilidade por modelo
@@ -552,8 +648,9 @@ async function identificar() {
     const sug = [];
     for (const m of modelos.slice(0, 5)) {
       for (const o of Cat.opcoesCor(m.base)) {
-        const p = m.p * (pc[o.cor] || 0) * (o.emLinha ? 1 : 0.6);
-        sug.push({ ...o, base:m.base, p, pModelo:m.p, pCor:pc[o.cor] || 0 });
+        const pC = o.cor ? (pc[o.cor] || 0) : 1;   // produto sem cor no código
+        const p = m.p * pC * (o.emLinha ? 1 : 0.6);
+        sug.push({ ...o, base:m.base, p, pModelo:m.p, pCor:pC });
       }
     }
     sug.sort((a, b) => b.p - a.p);
@@ -570,7 +667,11 @@ function mostrarResultado() {
   let txt;
   if (!Modelo.net) txt = 'Modelo de formato não carregado — escolha o modelo manualmente.';
   else if (!Treino.ex.length) txt = 'Nenhum modelo treinado ainda — escolha manualmente (e marque "usar para treinar").';
-  else if (cap.modelos[0]) txt = `Formato mais parecido: ${cap.modelos[0].base} (${pct(cap.modelos[0].p)}, semelhança ${cap.modelos[0].sim.toFixed(2)})`;
+  else if (cap.modelos[0]) {
+    txt = `Formato mais parecido: ${cap.modelos[0].base} (${pct(cap.modelos[0].p)}, semelhança ${cap.modelos[0].sim.toFixed(2)})`;
+    const fam = cap.modelos[0].base.slice(0, 4);
+    if (cap.modelos.slice(1, 4).some(m => m.base.slice(0, 4) === fam && m.p > 0.1)) txt += ' — confira o TAMANHO: esse formato existe em mais de uma medida.';
+  }
   else txt = '';
   $('#modeloLido').textContent = txt;
 
@@ -698,7 +799,8 @@ function renderTreinados() {
     <div class="reg"><span><span class="sku">${esc(b)}</span> <small class="sub">${esc(Cat.rotulo(b))}</small></span>
     <span class="linha"><b>${c[b]}</b><button class="bt sec peq" data-del="${esc(b)}" type="button">apagar</button></span></div>`).join('')
     : '<p class="vazio">Nenhum modelo treinado ainda.</p>';
-  $('#treinoInfo').textContent = `${Treino.ex.length} foto(s) de treino em ${ks.length} modelo(s).`;
+  const nCat = Treino.ex.filter(e => e.origem === 'catalogo').length;
+  $('#treinoInfo').textContent = `${Treino.ex.length} exemplo(s) de treino em ${ks.length} modelo(s) — ${nCat} do catálogo, ${Treino.ex.length - nCat} de fotos reais.`;
   renderCadSel();
 }
 
@@ -716,6 +818,61 @@ async function calibrarCor() {
 }
 
 /* =========================================================
+   Treino com as fotos do catálogo (pasta treino/ do site)
+   ========================================================= */
+const VARIACOES_CAT = 8;
+const FUNDOS = ['#ecebe5', '#d6d4cc', '#9a9a96', '#5a5a58', '#2e2e2e', 'ruido'];
+function carregarImagem(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('imagem ' + src)); i.src = src; }); }
+function variacao(img, n) {
+  // quadro com a mesma proporção da guia da câmera (2:3)
+  const W = 320, H = 480, c = document.createElement('canvas'); c.width = W; c.height = H;
+  const ctx = c.getContext('2d'), rnd = (a, b) => a + Math.random() * (b - a);
+  const fundo = FUNDOS[n % FUNDOS.length];
+  if (fundo === 'ruido') { const base = rnd(60, 220); const im = ctx.createImageData(W, H); for (let i = 0; i < im.data.length; i += 4) { const v = base + rnd(-25, 25); im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255; } ctx.putImageData(im, 0, 0); }
+  else { ctx.fillStyle = fundo; ctx.fillRect(0, 0, W, H); }
+  const k = Math.min(W / img.width, H / img.height) * (n === 0 ? 0.88 : rnd(0.72, 0.95));
+  const w = img.width * k, h = img.height * k;
+  ctx.save();
+  ctx.translate(W / 2 + (n ? rnd(-0.05, 0.05) * W : 0), H / 2 + (n ? rnd(-0.04, 0.05) * H : 0));
+  if (n) ctx.rotate(rnd(-5, 5) * Math.PI / 180);
+  if (n % 2) ctx.scale(-1, 1);
+  ctx.filter = n ? `brightness(${rnd(0.75, 1.25).toFixed(2)}) contrast(${rnd(0.85, 1.15).toFixed(2)})` : 'none';
+  ctx.drawImage(img, -w / 2, -h / 2, w, h);
+  ctx.restore();
+  return c;
+}
+async function treinarComCatalogo() {
+  if (ocupado) return;
+  if (!Modelo.net) { toast('Modelo de IA não carregado'); return; }
+  const prog = $('#progCat');
+  let lista;
+  try { const r = await fetch('treino/index.json', { cache:'no-cache' }); if (!r.ok) throw new Error('HTTP ' + r.status); lista = await r.json(); }
+  catch (e) { toast('Não achei a pasta treino/ no site (' + e.message + ')', 4000); return; }
+  const ja = Treino.ex.filter(e => e.origem === 'catalogo').length;
+  if (ja && !confirm(`Já existe treino do catálogo (${ja} variações). Refazer do zero?`)) return;
+  ocupado = true; ['#btTreinoCat', '#btApagarCat', '#btCad1', '#btCadRajada'].forEach(s => $(s).disabled = true);
+  try {
+    if (ja) await Treino.apagarOrigem('catalogo');
+    let feitos = 0, pulados = 0;
+    for (const item of lista) {
+      if (Cat.bases.size && !Cat.bases.has(item.base)) { pulados++; continue; }
+      let img;
+      try { img = await carregarImagem('treino/' + item.arquivo); } catch (_) { pulados++; continue; }
+      const lote = [];
+      for (let n = 0; n < VARIACOES_CAT; n++) lote.push({ base:item.base, v:Modelo.vetor(variacao(img, n)), origem:'catalogo' });
+      await Treino.adicionarVarios(lote);
+      feitos++;
+      prog.textContent = `Treinando: ${feitos} de ${lista.length} modelos…`;
+      await sleep(0); // deixa a tela atualizar
+    }
+    await Treino.carregar(); renderTreinados();
+    prog.textContent = `Pronto: ${feitos} modelos treinados com o catálogo` + (pulados ? ` (${pulados} ignorados)` : '') + '.';
+    toast('Treino com o catálogo concluído');
+  } catch (e) { prog.textContent = 'Erro: ' + e.message; }
+  finally { ocupado = false; ['#btTreinoCat', '#btApagarCat', '#btCad1', '#btCadRajada'].forEach(s => $(s).disabled = false); }
+}
+
+/* =========================================================
    Fila de envio (offline → Apps Script)
    ========================================================= */
 const Fila = {
@@ -728,8 +885,10 @@ const Fila = {
     let enviados = 0;
     try {
       const pend = (await DB.todos('fila')).filter(r => r.status !== 'enviado').sort((a, b) => a.ts.localeCompare(b.ts));
-      for (let i = 0; i < pend.length; i += LOTE_ENVIO) {
-        const lote = pend.slice(i, i + LOTE_ENVIO);
+      for (let i = 0; i < pend.length;) {
+        // lote: até 25 registros, mas no máximo LOTE_ENVIO com foto
+        const lote = []; let fotos = 0;
+        while (i < pend.length && lote.length < 25 && (fotos < LOTE_ENVIO || !pend[i].foto)) { if (pend[i].foto) fotos++; lote.push(pend[i++]); }
         const body = JSON.stringify({ token:cfg.token, registros:lote.map(({ status, ...r }) => r) });
         const resp = await fetch(cfg.url, { method:'POST', headers:{ 'Content-Type':'text/plain;charset=utf-8' }, body });
         const j = await resp.json();
@@ -772,7 +931,7 @@ async function atualizarFilaUI() {
 async function exportarTreino() {
   const cal = await DB.ler('kv', 'cores');
   const dados = { app:'vasos', versao:1, modelo:Modelo.id || cfg.modelUrl || 'mobilenet_v2_1.0', criado:new Date().toISOString(),
-    exemplos:Treino.ex.map(e => ({ base:e.base, v:f32ToB64(e.v) })), cores:cal || {} };
+    exemplos:Treino.ex.map(e => ({ base:e.base, v:f32ToB64(e.v), o:e.origem })), cores:cal || {} };
   baixar(`treino-vasos-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(dados));
 }
 async function importarTreino(arq) {
@@ -780,7 +939,7 @@ async function importarTreino(arq) {
   if (d.app !== 'vasos' || !Array.isArray(d.exemplos)) throw new Error('Arquivo de treino inválido');
   const meu = Modelo.id || cfg.modelUrl || 'mobilenet_v2_1.0';
   if (d.modelo && d.modelo !== meu && !confirm(`O treino foi feito com outro modelo (${d.modelo}). Importar mesmo assim?`)) return;
-  const recs = d.exemplos.map(e => { const v = b64ToF32(e.v); return { base:e.base, v:v.buffer, ts:Date.now(), modelo:d.modelo }; });
+  const recs = d.exemplos.map(e => { const v = b64ToF32(e.v); return { base:e.base, v:v.buffer, ts:Date.now(), modelo:d.modelo, origem:e.o || 'foto' }; });
   await DB.gravarVarios('exemplos', recs);
   if (d.cores && Object.keys(d.cores).length && confirm('O arquivo também tem calibração de cores. Substituir a calibração deste celular?')) { await DB.gravar('kv', d.cores, 'cores'); await Cores.carregar(); renderPaleta(); }
   await Treino.carregar(); renderTreinados();
@@ -798,9 +957,11 @@ function trocarAba(aba) {
   abaAtual = aba;
   document.querySelectorAll('nav.abas button').forEach(b => b.classList.toggle('on', b.dataset.tab === aba));
   document.querySelectorAll('section.tab').forEach(s => s.hidden = s.id !== 'tab-' + aba);
-  const usaCam = aba === 'ident' || aba === 'cad';
+  const usaCam = aba === 'ident' || aba === 'cad' || aba === 'est';
   $('#cam').hidden = !usaCam;
+  $('#cam').classList.toggle('vivo-oculto', aba === 'est');   // na esteira o vídeo roda escondido e é desenhado no canvas
   if (usaCam) Cam.ligar(); else Cam.desligar();
+  if (window.Esteira) Esteira.aoTrocarAba(aba);
   if (aba === 'cad') { pickCad.render(); renderTreinados(); renderPaleta(); }
   if (aba === 'fila') atualizarFilaUI();
   if (aba === 'cfg') preencherCfg();
@@ -825,6 +986,8 @@ function ligarEventos() {
 
   $('#btCad1').addEventListener('click', () => cadastrar(1));
   $('#btCadRajada').addEventListener('click', () => cadastrar(10));
+  $('#btTreinoCat').addEventListener('click', treinarComCatalogo);
+  $('#btApagarCat').addEventListener('click', async () => { if (confirm('Apagar o treino feito com as fotos do catálogo? (fotos reais ficam)')) { const n = await Treino.apagarOrigem('catalogo'); renderTreinados(); toast(n + ' variações apagadas'); } });
   $('#listaTreinados').addEventListener('click', async e => {
     const b = e.target.closest('[data-del]'); if (!b) return;
     if (confirm('Apagar as fotos de treino de ' + b.dataset.del + '?')) { await Treino.apagarBase(b.dataset.del); renderTreinados(); }
@@ -861,7 +1024,7 @@ function ligarEventos() {
 
   window.addEventListener('online', () => { stRede(); Fila.enviar(); });
   window.addEventListener('offline', stRede);
-  document.addEventListener('visibilitychange', () => { if (document.hidden) Cam.desligar(); else if (abaAtual === 'ident' || abaAtual === 'cad') Cam.ligar(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) Cam.desligar(); else if (abaAtual === 'ident' || abaAtual === 'cad' || abaAtual === 'est') Cam.ligar(); });
   setInterval(() => Fila.enviar(), 60000);
 }
 
@@ -878,5 +1041,6 @@ async function iniciar() {
 }
 iniciar();
 </script>
+<script src="esteira.js"></script>
 </body>
 </html>
