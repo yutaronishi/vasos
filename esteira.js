@@ -480,47 +480,71 @@ const Esteira = (() => {
     const c = document.createElement('canvas'); c.width = W; c.height = H;
     const ctx = c.getContext('2d', { willReadFrequently: true }); ctx.drawImage(foto, 0, 0, W, H);
     const d = ctx.getImageData(0, 0, W, H).data;
-    // amostras da borda (6%)
-    const bx = Math.max(2, Math.round(W * 0.06)), by = Math.max(2, Math.round(H * 0.06)), borda = [];
+    // Recorte do vaso por COR: o miolo da guia (área amarela) é o vaso, a borda da foto é o fundo.
+    // Cada pixel vai para o grupo mais parecido. Funciona com fundo poluído, desde que o fundo
+    // não tenha a mesma cor do vaso. Distância em Lab, com peso menor no claro/escuro (sombra no vaso).
+    const LAB = new Float32Array(N * 3);
+    for (let p = 0; p < N; p++) { const i = p * 4, l = rgb2lab(d[i], d[i + 1], d[i + 2]); LAB[p * 3] = l[0]; LAB[p * 3 + 1] = l[1]; LAB[p * 3 + 2] = l[2]; }
+    const dist = (p, c) => Math.sqrt(((LAB[p * 3] - c[0]) * 0.5) ** 2 + (LAB[p * 3 + 1] - c[1]) ** 2 + (LAB[p * 3 + 2] - c[2]) ** 2);
+    const kmeans = (pts, k) => {
+      if (!pts.length) return [];
+      let cs = Array.from({ length: k }, (_, q) => { const p = pts[Math.floor((q + 0.5) * pts.length / k)]; return [LAB[p * 3], LAB[p * 3 + 1], LAB[p * 3 + 2]]; });
+      for (let it = 0; it < 8; it++) {
+        const sm = cs.map(() => [0, 0, 0, 0]);
+        for (const p of pts) { let bi = 0, bd = Infinity; cs.forEach((c, q) => { const dd = dist(p, c); if (dd < bd) { bd = dd; bi = q; } }); sm[bi][0] += LAB[p * 3]; sm[bi][1] += LAB[p * 3 + 1]; sm[bi][2] += LAB[p * 3 + 2]; sm[bi][3]++; }
+        cs = cs.map((c, q) => sm[q][3] ? [sm[q][0] / sm[q][3], sm[q][1] / sm[q][3], sm[q][2] / sm[q][3]] : c);
+      }
+      return cs;
+    };
+    // amostras: miolo (área amarela, em coordenadas da guia) e borda (8%)
+    const miolo = [], borda = [];
+    const mx0 = Math.round(W * 0.35), mx1 = Math.round(W * 0.65), my0 = Math.round(H * 0.40), my1 = Math.round(H * 0.66);   // miolo: corpo do vaso (as duas faces)
+    const bx = Math.max(2, Math.round(W * 0.08)), by = Math.max(2, Math.round(H * 0.08));
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      if (x >= bx && x < W - bx && y >= by && y < H - by) continue;
-      if ((x + y) % 2) continue; const i = (y * W + x) * 4; borda.push([d[i], d[i + 1], d[i + 2]]);
+      const p = y * W + x;
+      if (x >= mx0 && x < mx1 && y >= my0 && y < my1) { if ((x + y) % 2 === 0) miolo.push(p); }
+      else if ((x < bx || x >= W - bx || y < by || y >= H - by) && (x + y) % 2 === 0) borda.push(p);
     }
-    // k-means com 3 cores
-    let cent = [borda[0], borda[Math.floor(borda.length / 2)], borda[borda.length - 1]].map(v => v.slice());
-    const perto = v => { let bi = 0, bd = Infinity; cent.forEach((cc, k) => { const dd = (v[0] - cc[0]) ** 2 + (v[1] - cc[1]) ** 2 + (v[2] - cc[2]) ** 2; if (dd < bd) { bd = dd; bi = k; } }); return [bi, Math.sqrt(bd)]; };
-    for (let it = 0; it < 8; it++) {
-      const soma = cent.map(() => [0, 0, 0, 0]);
-      for (const v of borda) { const [k] = perto(v); soma[k][0] += v[0]; soma[k][1] += v[1]; soma[k][2] += v[2]; soma[k][3]++; }
-      cent = cent.map((cc, k) => soma[k][3] ? [soma[k][0] / soma[k][3], soma[k][1] / soma[k][3], soma[k][2] / soma[k][3]] : cc);
-    }
-    // só vale como fundo a cor que domina a borda (a peça pode encostar na borda, mas ocupa pouco dela)
-    const qtd = cent.map(() => 0); for (const v of borda) qtd[perto(v)[0]]++;
-    cent = cent.filter((_, k) => qtd[k] >= borda.length * 0.18);
-    if (!cent.length) return null;
-    const dists = borda.map(v => perto(v)[1]).filter(x => x < 60).sort((a, b) => a - b);
-    const lim = Math.max(28, (dists[Math.floor(dists.length * 0.9)] || 20) * 1.6);
-    // máscara
+    // cores do vaso: até 2 tons (face iluminada / face na sombra); descarta tom raro (pedaço de fundo no miolo)
+    let cV = kmeans(miolo, 3);
+    { const n = cV.map(() => 0); for (const p of miolo) { let bi = 0, bd = Infinity; cV.forEach((c, q) => { const dd = dist(p, c); if (dd < bd) { bd = dd; bi = q; } }); n[bi]++; }
+      cV = cV.filter((_, q) => n[q] >= miolo.length * 0.15); }
+    let cF = kmeans(borda, 5);
+    // se a peça encosta na borda, uma cor do "fundo" é a própria peça: descarta
+    cF = cF.filter(c => cV.every(v => Math.hypot((c[0] - v[0]) * 0.5, c[1] - v[1], c[2] - v[2]) > 4));
     const m = new Uint8Array(N), a = new Uint8Array(N), tmp = new Uint8Array(N);
-    for (let p = 0; p < N; p++) { const i = p * 4; m[p] = perto([d[i], d[i + 1], d[i + 2]])[1] > lim ? 1 : 0; }
+    for (let p = 0; p < N; p++) {
+      let dv = Infinity, df = Infinity;
+      for (const c of cV) dv = Math.min(dv, dist(p, c));
+      for (const c of cF) df = Math.min(df, dist(p, c));
+      m[p] = dv < 30 && dv < df ? 1 : 0;
+    }
     morf(m, a, W, H, 2, true, tmp); morf(a, m, W, H, 2, false, tmp);
     morf(m, a, W, H, 1, false, tmp); morf(a, m, W, H, 1, true, tmp);
-    // componentes: fica com a maior que encosta no centro
-    const lab = new Int32Array(N), pilha = new Int32Array(N); let id = 0, melhor = null;
-    for (let p0 = 0; p0 < N; p0++) {
-      if (!m[p0] || lab[p0]) continue; id++;
-      let topo = 0, area = 0, x0 = W, x1 = 0, y0 = H, y1 = 0, centro = 0; pilha[topo++] = p0; lab[p0] = id;
-      while (topo) {
-        const p = pilha[--topo], x = p % W, y = (p / W) | 0; area++;
-        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
-        if (Math.abs(x - W / 2) < W * 0.15 && Math.abs(y - H / 2) < H * 0.15) centro++;
-        if (x > 0 && m[p - 1] && !lab[p - 1]) { lab[p - 1] = id; pilha[topo++] = p - 1; }
-        if (x < W - 1 && m[p + 1] && !lab[p + 1]) { lab[p + 1] = id; pilha[topo++] = p + 1; }
-        if (y > 0 && m[p - W] && !lab[p - W]) { lab[p - W] = id; pilha[topo++] = p - W; }
-        if (y < H - 1 && m[p + W] && !lab[p + W]) { lab[p + W] = id; pilha[topo++] = p + W; }
+    // componentes: fica com a maior que encosta no centro.
+    // Antes, uma "abertura" corta pontes finas (folhas, frestas, cabos) que grudam o vaso no fundo.
+    const acharPeca = (mm) => {
+      const lab = new Int32Array(N), pilha = new Int32Array(N); let id = 0, melhor = null;
+      for (let p0 = 0; p0 < N; p0++) {
+        if (!mm[p0] || lab[p0]) continue; id++;
+        let topo = 0, area = 0, x0 = W, x1 = 0, y0 = H, y1 = 0, centro = 0; pilha[topo++] = p0; lab[p0] = id;
+        while (topo) {
+          const p = pilha[--topo], x = p % W, y = (p / W) | 0; area++;
+          if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+          if (Math.abs(x - W / 2) < W * 0.15 && Math.abs(y - H * 0.56) < H * 0.15) centro++;
+          if (x > 0 && mm[p - 1] && !lab[p - 1]) { lab[p - 1] = id; pilha[topo++] = p - 1; }
+          if (x < W - 1 && mm[p + 1] && !lab[p + 1]) { lab[p + 1] = id; pilha[topo++] = p + 1; }
+          if (y > 0 && mm[p - W] && !lab[p - W]) { lab[p - W] = id; pilha[topo++] = p - W; }
+          if (y < H - 1 && mm[p + W] && !lab[p + W]) { lab[p + W] = id; pilha[topo++] = p + W; }
+        }
+        if (area > N * 0.03 && centro > 0 && (!melhor || centro > melhor.centro || (centro === melhor.centro && area > melhor.area))) melhor = { id, area, centro, x0, x1, y0, y1 };
       }
-      if (area > N * 0.03 && centro > 0 && (!melhor || area > melhor.area)) melhor = { id, area, x0, x1, y0, y1 };
-    }
+      return { lab, melhor };
+    };
+    const abrir = r => { const o = new Uint8Array(N); morf(m, a, W, H, r, false, tmp); morf(a, o, W, H, r, true, tmp); return o; };
+    let { lab, melhor } = acharPeca(abrir(2));
+    // ainda grudado no fundo (encosta em cima e nos dois lados)? corta mais forte
+    if (melhor && melhor.y0 <= 1 && melhor.x0 <= 1 && melhor.x1 >= W - 2) ({ lab, melhor } = acharPeca(abrir(4)));
     if (!melhor) return null;
     // preenche buracos da peça (ex.: boca aberta, reflexos)
     for (let y = melhor.y0; y <= melhor.y1; y++) {
@@ -531,7 +555,12 @@ const Esteira = (() => {
     const obs = observarEm(lab, W, H, melhor, d, [1, 1, 1]);
     // imagem de conferência: peça destacada
     const ov = ctx.getImageData(0, 0, W, H);
-    for (let p = 0; p < N; p++) if (lab[p] !== melhor.id) { ov.data[p * 4] *= 0.35; ov.data[p * 4 + 1] *= 0.35; ov.data[p * 4 + 2] *= 0.35; }
+    for (let p = 0; p < N; p++) {
+      const den = lab[p] === melhor.id;
+      if (!den) { ov.data[p * 4] *= 0.3; ov.data[p * 4 + 1] *= 0.3; ov.data[p * 4 + 2] *= 0.3; continue; }
+      const x = p % W, y = (p / W) | 0;   // contorno em verde
+      if (x === 0 || y === 0 || x === W - 1 || y === H - 1 || lab[p - 1] !== melhor.id || lab[p + 1] !== melhor.id || lab[p - W] !== melhor.id || lab[p + W] !== melhor.id) { ov.data[p * 4] = 40; ov.data[p * 4 + 1] = 255; ov.data[p * 4 + 2] = 120; }
+    }
     ctx.putImageData(ov, 0, 0);
     return { obs, modelos: classificar(obs, false), conferencia: c, toca: obs.toca };
   }

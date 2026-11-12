@@ -147,8 +147,8 @@
 
   <!-- CADASTRO / TREINO -->
   <section id="tab-cad" class="tab" hidden>
-    <h3>Treino inicial com o catálogo</h3>
-    <div class="card">
+    <h3 hidden>Treino inicial com o catálogo</h3>
+    <div class="card" hidden>
       <p class="sub" style="margin-top:0">Usa as fotos dos produtos do catálogo 2026 (cerca de 140 modelos) para dar um ponto de partida ao reconhecimento. Gera variações de cada foto (fundo, giro, tamanho, luz). Leva 1 a 3 minutos e só precisa ser feito uma vez por celular. Depois, as fotos reais confirmadas no dia a dia vão melhorando o acerto.</p>
       <div class="linha">
         <button id="btTreinoCat" class="bt" type="button">Treinar com o catálogo</button>
@@ -295,7 +295,7 @@
 
 <nav class="abas">
   <button data-tab="ident" class="on"><span>📷</span>Identificar</button>
-  <button data-tab="est"><span>🏭</span>Esteira</button>
+  <button data-tab="est" hidden><span>🏭</span>Esteira</button>
   <button data-tab="cad"><span>🧠</span>Cadastro</button>
   <button data-tab="fila"><span>📤</span>Fila</button>
   <button data-tab="cfg"><span>⚙️</span>Config</button>
@@ -303,11 +303,11 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js"></script>
 <script>
 'use strict';
-const VERSAO_APP = '0.5';
+const VERSAO_APP = '0.6';
+// IA (MobileNet) desligada: o reconhecimento é só por código (contorno + cor). Para religar, true.
+const USAR_IA = false;
 
 /* =========================================================
    Constantes
@@ -560,9 +560,9 @@ const Cores = {
     return lista.map((x, i) => ({ ...x, p:w[i] / tot })).sort((a, b) => b.p - a.p);
   },
   async calibrar(cor, m) {
-    const r = this.refs[cor], n = r.n || 0;
+    const r = this.refs[cor], n = Math.min(r.n || 0, 19);   // média das últimas ~20: acompanha mudança de luz/lote
     const media = (v0, v1) => n ? (v0 * n + v1) / (n + 1) : v1;
-    this.refs[cor] = { ...r, L:media(r.L, m.L), a:media(r.a, m.a), b:media(r.b, m.b), s:media(r.s ?? m.s, m.s), hex:m.hex, n:n + 1 };
+    this.refs[cor] = { ...r, L:media(r.L, m.L), a:media(r.a, m.a), b:media(r.b, m.b), s:media(r.s ?? m.s, m.s), hex:m.hex, n:(r.n || 0) + 1 };
     await this.salvar();
   },
   async apagar(cor) { await this.salvarSem(cor); await this.carregar(); },
@@ -576,6 +576,7 @@ const Cores = {
 const Modelo = {
   net: null, id: '', erro: '',
   async carregar() {
+    if (!USAR_IA) { $('#stModelo').hidden = true; return; }
     stModelo('carregando…', '');
     try {
       if (!window.tf || !window.mobilenet) throw new Error('bibliotecas não carregaram (sem internet no 1º acesso?)');
@@ -668,9 +669,9 @@ async function identificar() {
       }
     }
     sug.sort((a, b) => b.p - a.p);
-    // não repetir o mesmo modelo nas 3 sugestões (mostra alternativas de formato/tamanho)
-    const vistos = new Set(), top = [];
-    for (const x of sug) { if (vistos.has(x.base)) continue; vistos.add(x.base); top.push(x); if (top.length === 3) break; }
+    // no máximo 2 cores do mesmo modelo nas 3 sugestões (mistura alternativa de cor e de formato)
+    const porBase = {}, top = [];
+    for (const x of sug) { if ((porBase[x.base] || 0) >= 2) continue; porBase[x.base] = (porBase[x.base] || 0) + 1; top.push(x); if (top.length === 3) break; }
     cap = { foto:q.foto, cor, vetor, modelos, cores:coresTodas, sugestoes:top, sil };
     mostrarResultado();
   } finally { btn.disabled = false; }
@@ -680,7 +681,9 @@ function mostrarResultado() {
   $('#resultado').hidden = false;
   $('#snapImg').src = (cap.sil ? cap.sil.conferencia : cap.foto).toDataURL('image/jpeg', 0.7);
   const c0 = cap.cores[0];
-  $('#corLida').innerHTML = `<span class="sw" style="background:${cap.cor.hex}"></span> Cor lida: <b>${esc(Cat.nomeCor(c0.cor))}</b> <small class="sub">(${pct(c0.p)})</small>`;
+  const nCal = Object.values(Cores.refs).filter(r => r.n > 0).length;
+  $('#corLida').innerHTML = `<span class="sw" style="background:${cap.cor.hex}"></span> Cor lida: <b>${esc(Cat.nomeCor(c0.cor))}</b> <small class="sub">(${pct(c0.p)})</small>` +
+    `<br><small class="sub">${nCal ? nCal + ' cor(es) já aprendida(s) com peças reais' : 'cores ainda do catálogo impresso — confirme algumas peças para o app aprender'}</small>`;
   let txt;
   if (!cap.sil && !cap.modelos.length) txt = 'Não consegui separar o vaso do fundo — afaste um pouco, centralize a peça e use um fundo liso. Ou escolha manualmente.';
   else if (cap.modelos[0]) {
@@ -759,6 +762,7 @@ async function registrar() {
   await DB.gravar('fila', rec);
   if ($('#chkTreinar').checked) {
     if (cap.sil && window.Esteira) await Esteira.adicionarSilhueta(atual.base, cap.sil.obs);   // contorno real (sem IA)
+    if (atual.cor && Cores.refs[atual.cor]) await Cores.calibrar(atual.cor, cap.cor);           // cor real confirmada
     if (cap.vetor) await Treino.adicionar(atual.base, cap.vetor);                              // vetor da IA (se carregada)
     renderTreinados();
   }
@@ -838,7 +842,7 @@ function renderPaleta() {
 }
 
 async function calibrarCor() {
-  try { const q = await capturarQuadro(); const c = $('#calCor').value; await Cores.calibrar(c, q.cor); renderPaleta(); toast('Cor ' + Cat.nomeCor(c) + ' calibrada'); }
+  try { const q = await capturarQuadro(); const c = $('#calCor').value; const sil = window.Esteira ? Esteira.analisarFoto(q.foto) : null; await Cores.calibrar(c, sil ? sil.obs.cor : q.cor); renderPaleta(); toast('Cor ' + Cat.nomeCor(c) + ' calibrada'); }
   catch (e) { toast(e.message); }
 }
 
