@@ -3,202 +3,339 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#1f5c4a">
-<title>Identificação de Vasos</title>
+<meta name="theme-color" content="#1e5c4f">
+<title>Japi Garden · Identificação de vasos</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>
+  /* ---------- Fontes (arquivos locais; sem eles o app usa a fonte do sistema) ---------- */
+  @font-face{font-family:"Figtree";src:url("figtree.woff2") format("woff2");font-weight:300 900;font-display:swap}
+  @font-face{font-family:"Plex Mono";src:url("plexmono.woff2") format("woff2");font-weight:600;font-display:swap}
+
+  /* ---------- Tokens ---------- */
   :root{
-    --verde:#1f5c4a; --verde2:#2f7d65; --fundo:#f4f2ec; --card:#fff; --txt:#1d1d1b; --sub:#6b6b66;
-    --borda:#dedbd2; --ok:#2e7d32; --alerta:#b26a00; --erro:#c62828; --raio:12px;
+    --verde:#1e5c4f; --verde-esc:#164539; --verde-suave:#e6eee8; --creme:#f4e8be;
+    --fundo:#f6f3ea; --sup:#fffdf7; --sup-2:#efeadc; --linha:#e2dccb; --linha-forte:#cfc8b3;
+    --tinta:#15221e; --sub:#5d6963; --fraco:#8b948e;
+    --ok:#2a7748; --ok-suave:#e3f0e6; --alerta:#9a5c06; --alerta-suave:#f8ecd2; --erro:#b0352a; --erro-suave:#f8e4e0;
+    --r-s:8px; --r-m:12px; --r-g:16px;
+    --e1:4px; --e2:8px; --e3:12px; --e4:16px; --e5:24px; --e6:32px;
+    --nav:64px;
+    --sans:"Figtree",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --mono:"Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box}
-  html,body{margin:0;background:var(--fundo);color:var(--txt);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-  body{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
-  header.topo{position:sticky;top:0;z-index:5;background:var(--verde);color:#fff;display:flex;gap:6px;align-items:center;padding:10px 12px;flex-wrap:wrap}
-  header.topo b{font-size:18px;margin-right:auto}
-  .pill{font-size:12px;padding:3px 8px;border-radius:99px;background:rgba(255,255,255,.18);white-space:nowrap}
-  .pill.ok{background:#3c9a6e}.pill.alerta{background:#c98a1e}.pill.erro{background:#d9534f}
-  main{max-width:640px;margin:0 auto;padding:12px 16px}
-  .cam{margin-bottom:12px}
-  .vwrap{position:relative;width:min(100%, calc(52vh * .75));aspect-ratio:3/4;margin:0 auto;background:#111;border-radius:var(--raio);overflow:hidden}
+  html{-webkit-text-size-adjust:100%}
+  html,body{margin:0;background:var(--fundo);color:var(--tinta);font:16px/1.45 var(--sans);-webkit-font-smoothing:antialiased}
+  body{padding-bottom:calc(var(--nav) + env(safe-area-inset-bottom))}
+  button,input,select{font:inherit;color:inherit}
+  button{-webkit-tap-highlight-color:transparent}
+  :focus-visible{outline:2px solid var(--verde);outline-offset:2px}
+  [hidden]{display:none!important}
+
+  /* ---------- Cabeçalho ---------- */
+  header.topo{position:sticky;top:0;z-index:5;background:var(--verde);color:var(--creme);display:flex;align-items:center;gap:var(--e3);padding:var(--e2) var(--e4);padding-top:calc(var(--e2) + env(safe-area-inset-top));min-height:52px}
+  .marca{display:flex;align-items:center;gap:var(--e3);margin-right:auto;min-width:0}
+  .marca img{height:32px;width:auto;display:block}
+  .marca span{font-size:13px;font-weight:500;opacity:.8;padding-left:var(--e3);border-left:1px solid rgba(244,232,190,.3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;white-space:nowrap;color:var(--creme)}
+  .pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.5}
+  .pill.ok::before{background:#7fd6a0;opacity:1}
+  .pill.alerta::before{background:#f1c15b;opacity:1}
+  .pill.erro::before{background:#f08a7c;opacity:1}
+  #stFila{padding:3px 10px;border-radius:99px;background:rgba(244,232,190,.14)}
+  #stFila::before{display:none}
+  #stFila.alerta{background:var(--creme);color:var(--verde-esc)}
+
+  main{max-width:560px;margin:0 auto;padding:var(--e4)}
+  h2{font-size:22px;line-height:1.2;font-weight:700;letter-spacing:-.01em;margin:var(--e2) 0 var(--e4)}
+  h3{font-size:15px;font-weight:700;margin:var(--e5) 0 var(--e2);display:flex;align-items:baseline;gap:var(--e2)}
+  h3 small{font-weight:500}
+  p{margin:0 0 var(--e3)}
+  .sub,small{color:var(--sub);font-size:13px;line-height:1.4}
+  .sku{font-family:var(--mono);font-weight:600;letter-spacing:-.01em}
+
+  /* ---------- Câmera ---------- */
+  .cam{margin-bottom:var(--e4)}
+  .vwrap{position:relative;width:min(100%, calc(52vh * .75));aspect-ratio:3/4;margin:0 auto;background:#0e1513;border-radius:var(--r-g);overflow:hidden}
   .vwrap video{width:100%;height:100%;object-fit:cover;display:block}
-  .guia{position:absolute;left:10%;top:5%;right:10%;bottom:5%;border:2px dashed rgba(255,255,255,.75);border-radius:10px;pointer-events:none}
-  .amostra{position:absolute;left:35%;top:45%;width:30%;height:30%;border:2px solid #ffd54f;border-radius:6px;pointer-events:none}
-  .amostra::after{content:"cor";position:absolute;top:-20px;left:0;font-size:11px;color:#ffd54f}
+  /* guia: quatro cantos em vez de moldura inteira */
+  .guia{position:absolute;left:10%;top:5%;right:10%;bottom:5%;pointer-events:none;--c:rgba(255,253,247,.92);--t:2px;--l:22px;
+    background:
+      linear-gradient(var(--c),var(--c)) left top/var(--l) var(--t) no-repeat, linear-gradient(var(--c),var(--c)) left top/var(--t) var(--l) no-repeat,
+      linear-gradient(var(--c),var(--c)) right top/var(--l) var(--t) no-repeat, linear-gradient(var(--c),var(--c)) right top/var(--t) var(--l) no-repeat,
+      linear-gradient(var(--c),var(--c)) left bottom/var(--l) var(--t) no-repeat, linear-gradient(var(--c),var(--c)) left bottom/var(--t) var(--l) no-repeat,
+      linear-gradient(var(--c),var(--c)) right bottom/var(--l) var(--t) no-repeat, linear-gradient(var(--c),var(--c)) right bottom/var(--t) var(--l) no-repeat}
+  .amostra{position:absolute;left:35%;top:45%;width:30%;height:30%;border:1.5px solid var(--creme);border-radius:6px;pointer-events:none}
+  .amostra::after{content:"cor";position:absolute;top:-19px;left:-1px;font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--creme);text-shadow:0 1px 2px rgba(0,0,0,.5)}
   .previa{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-  .previa-msg{position:absolute;left:8px;right:8px;bottom:8px;padding:6px 10px;border-radius:8px;font-size:14px;font-weight:600;text-align:center;color:#fff;background:rgba(0,0,0,.6);pointer-events:none}
-  .previa-msg.ok{background:rgba(46,125,50,.85)} .previa-msg.ruim{background:rgba(198,40,40,.85)}
-  .aviso{background:#fdecea;color:var(--erro);border-radius:10px;padding:10px 12px;font-size:14px;font-weight:600;margin-bottom:8px}
+  .previa-msg{position:absolute;left:var(--e2);right:var(--e2);bottom:var(--e2);padding:var(--e2) var(--e3);border-radius:var(--r-s);font-size:13px;font-weight:600;line-height:1.3;color:#fff;background:rgba(14,21,19,.78);pointer-events:none;display:flex;gap:var(--e2);align-items:center}
+  .previa-msg::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:#f08a7c}
+  .previa-msg.ok::before{background:#7fd6a0}
   .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .25s}
   .flash.on{opacity:.8;transition:none}
-  .camerr{background:#fdecea;color:var(--erro);padding:10px;border-radius:var(--raio);margin-top:8px;font-size:14px}
-  h3{font-size:15px;margin:18px 0 8px;color:var(--verde)}
-  .card{background:var(--card);border:1px solid var(--borda);border-radius:var(--raio);padding:12px;margin-bottom:10px}
-  .bt{appearance:none;border:0;border-radius:var(--raio);background:var(--verde);color:#fff;font-size:16px;font-weight:600;padding:12px 16px;min-height:48px;cursor:pointer}
-  .bt:active{background:var(--verde2)} .bt:disabled{opacity:.45}
-  .bt.grande{width:100%;font-size:19px;min-height:60px}
-  .bt.sec{background:#e6e3da;color:var(--txt)} .bt.perigo{background:var(--erro)} .bt.peq{min-height:36px;padding:6px 10px;font-size:14px}
-  .linha{display:flex;gap:8px;align-items:center;flex-wrap:wrap} .linha>.bt{flex:1}
-  input[type=text],input[type=url],input[type=number],input[type=search],input[type=password],select{width:100%;font-size:16px;padding:11px 12px;border:1px solid var(--borda);border-radius:10px;background:#fff;color:var(--txt);min-height:46px}
-  label.campo{display:block;font-size:13px;color:var(--sub);margin:10px 0 4px}
-  label.chk{display:flex;gap:10px;align-items:center;margin:12px 0;font-size:15px} label.chk input{width:22px;height:22px}
-  .snap{display:flex;gap:12px;align-items:center} .snap img{width:96px;height:128px;object-fit:cover;border-radius:8px;background:#ddd}
-  .sw{display:inline-block;width:22px;height:22px;border-radius:6px;border:1px solid rgba(0,0,0,.2);vertical-align:middle;margin-right:6px;flex:none}
-  .sug{display:flex;gap:10px;align-items:center;width:100%;text-align:left;background:#fff;border:2px solid var(--borda);border-radius:var(--raio);padding:10px;margin-bottom:8px;font-size:15px;color:var(--txt);cursor:pointer}
-  .sug.sel{border-color:var(--verde);background:#eef6f2}
-  .sug .sku{font-weight:700;font-family:ui-monospace,monospace}
-  .sug small,.sub{color:var(--sub);font-size:13px}
-  .tag{font-size:11px;padding:2px 6px;border-radius:6px;background:#eee;color:#555;margin-left:4px}
-  .tag.enc{background:#fff3e0;color:var(--alerta)}
-  .lista{max-height:260px;overflow:auto;border:1px solid var(--borda);border-radius:10px;margin-top:6px;background:#fff}
-  .lista button{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid #eee;background:none;padding:10px 12px;font-size:14px;color:var(--txt);cursor:pointer}
-  .lista button:active{background:#eef6f2}
-  .vazio{color:var(--sub);font-size:14px;padding:10px 12px;margin:0}
-  .escolha{font-size:17px;padding:10px 12px;background:#eef6f2;border-radius:10px;margin:10px 0}
-  .escolha .sku{font-family:ui-monospace,monospace;font-weight:700;font-size:20px}
-  .qtd{display:flex;gap:8px;align-items:center} .qtd input{text-align:center;font-size:22px;font-weight:700} .qtd .bt{width:64px;font-size:24px}
-  .reg{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid #eee;font-size:14px}
-  .reg .sku{font-family:ui-monospace,monospace;font-weight:600}
-  .st{font-size:12px;padding:2px 8px;border-radius:99px;white-space:nowrap;align-self:center}
-  .st.pendente{background:#fff3e0;color:var(--alerta)} .st.enviado{background:#e8f5e9;color:var(--ok)}
-  .paleta{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px}
-  .paleta div{display:flex;align-items:center;font-size:13px;padding:6px;background:#fff;border:1px solid #eee;border-radius:8px}
-  details summary{cursor:pointer;color:var(--verde);font-weight:600;padding:8px 0}
-  nav.abas{position:fixed;left:0;right:0;bottom:0;display:flex;background:#fff;border-top:1px solid var(--borda);padding-bottom:env(safe-area-inset-bottom);z-index:6}
-  nav.abas button{flex:1;border:0;background:none;padding:10px 4px 12px;font-size:13px;color:var(--sub);cursor:pointer;min-height:60px}
-  nav.abas button span{display:block;font-size:20px;line-height:1.2}
-  nav.abas button.on{color:var(--verde);font-weight:700}
-  .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;font-size:15px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9;max-width:90vw}
-  .toast.on{opacity:.95}
-  .estwrap{background:#111;border-radius:var(--raio);overflow:hidden}
-  .estwrap canvas{display:block;width:100%;height:auto}
-  .contador{display:flex;justify-content:space-between;align-items:center;font-size:16px;margin-top:10px}
-  .contador b{font-size:34px;color:var(--verde);margin-right:4px}
-  .peca{display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid #eee;font-size:13px}
-  .peca img{width:56px;height:56px;object-fit:contain;background:#eee;border-radius:6px;flex:none}
-  .tag.rev{background:#fdecea;color:var(--erro)}
-  input[type=range]{width:100%}
   .cam.vivo-oculto{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
-  [hidden]{display:none!important}
+  .aviso,.camerr{background:var(--erro-suave);color:var(--erro);border-radius:var(--r-m);padding:var(--e3) var(--e4);font-size:14px;font-weight:500;margin:var(--e2) 0}
+  .dica{font-size:13px;color:var(--sub);text-align:center;margin:var(--e3) var(--e4) 0}
+
+  /* ---------- Botões ---------- */
+  .bt{appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:var(--e2);border:1px solid transparent;border-radius:var(--r-m);background:var(--verde);color:var(--creme);font-size:16px;font-weight:600;padding:0 var(--e4);min-height:48px;cursor:pointer;transition:background .12s,transform .08s,border-color .12s}
+  .bt:active{background:var(--verde-esc);transform:scale(.985)}
+  .bt:disabled{opacity:.45;pointer-events:none}
+  .bt svg{width:20px;height:20px;flex:none}
+  .bt.grande{width:100%;font-size:17px;min-height:56px;border-radius:var(--r-g)}
+  .bt.sec{background:var(--sup);color:var(--tinta);border-color:var(--linha-forte)}
+  .bt.sec:active{background:var(--sup-2)}
+  .bt.perigo{background:transparent;color:var(--erro);border-color:rgba(176,53,42,.35)}
+  .bt.perigo:active{background:var(--erro-suave)}
+  .bt.peq{min-height:36px;padding:0 var(--e3);font-size:14px;border-radius:var(--r-s)}
+  .linha{display:flex;gap:var(--e2);align-items:center;flex-wrap:wrap} .linha>.bt{flex:1}
+
+  /* ---------- Superfícies ---------- */
+  .card{background:var(--sup);border:1px solid var(--linha);border-radius:var(--r-g);padding:var(--e4);margin-bottom:var(--e3)}
+  .card>p:last-child{margin-bottom:0}
+  .vazio{color:var(--fraco);font-size:14px;padding:var(--e3) 0;margin:0;text-align:center}
+
+  /* ---------- Formulários ---------- */
+  label.campo{display:block;font-size:13px;font-weight:600;color:var(--sub);margin:var(--e4) 0 6px}
+  label.campo:first-child{margin-top:0}
+  label.campo b{color:var(--tinta);font-variant-numeric:tabular-nums}
+  input[type=text],input[type=url],input[type=number],input[type=search],input[type=password],select{width:100%;font-size:16px;padding:0 var(--e3);border:1px solid var(--linha-forte);border-radius:var(--r-m);background:#fff;color:var(--tinta);min-height:48px;transition:border-color .12s,box-shadow .12s}
+  input::placeholder{color:var(--fraco)}
+  input:focus,select:focus{outline:none;border-color:var(--verde);box-shadow:0 0 0 3px rgba(30,92,79,.15)}
+  select{appearance:none;padding-right:40px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%235d6963' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E") right 14px center no-repeat}
+  input[type=search]{padding-left:40px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' fill='none' stroke='%238b948e' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='8' cy='8' r='5.5'/%3E%3Cpath d='m12.5 12.5 3.5 3.5'/%3E%3C/svg%3E") 13px center no-repeat}
+  input[type=search]::-webkit-search-cancel-button{appearance:none}
+  input[type=range]{width:100%;accent-color:var(--verde);margin:0}
+  input[type=file]{width:100%;font-size:14px;color:var(--sub)}
+  input[type=file]::file-selector-button{font:inherit;font-weight:600;color:var(--tinta);background:var(--sup);border:1px solid var(--linha-forte);border-radius:var(--r-s);padding:8px 12px;margin-right:var(--e3);cursor:pointer}
+  /* interruptor */
+  label.chk{display:flex;flex-direction:row-reverse;justify-content:space-between;gap:var(--e4);align-items:center;margin:var(--e4) 0;font-size:15px;line-height:1.35;cursor:pointer}
+  label.chk input{appearance:none;flex:none;width:46px;height:28px;border-radius:99px;background:var(--linha-forte);position:relative;margin:0;cursor:pointer;transition:background .15s}
+  label.chk input::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
+  label.chk input:checked{background:var(--verde)}
+  label.chk input:checked::after{transform:translateX(18px)}
+  label.chk input:disabled{opacity:.45}
+
+  /* ---------- Identificar: leitura e sugestões ---------- */
+  .snap{display:flex;gap:var(--e4);align-items:flex-start}
+  .snap img{width:78px;height:104px;object-fit:cover;border-radius:var(--r-s);background:var(--sup-2);flex:none}
+  .snap #corLida{font-size:16px;margin-bottom:var(--e1)}
+  .sw{display:inline-block;width:18px;height:18px;border-radius:5px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.18);vertical-align:-3px;margin-right:6px;flex:none}
+  .sw-p{width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+  #sugestoes{background:var(--sup);border:1px solid var(--linha);border-radius:var(--r-g);overflow:hidden}
+  #sugestoes>p{padding:var(--e4);margin:0}
+  .sug{display:flex;gap:var(--e3);align-items:center;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--linha);padding:var(--e3) var(--e4) var(--e3) var(--e3);font-size:15px;cursor:pointer;position:relative;transition:background .12s}
+  .sug:last-child{border-bottom:0}
+  .sug:active{background:var(--sup-2)}
+  .sug.sel{background:var(--verde-suave)}
+  .sug-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+  .sug-txt .sku{font-size:16px}
+  .sug-nome{font-size:13px;color:var(--tinta);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sug-meta{font-size:12px;color:var(--sub)}
+  .barra{display:block;height:3px;border-radius:2px;background:var(--linha);margin-top:4px;overflow:hidden;max-width:160px}
+  .barra i{display:block;height:100%;background:var(--verde);border-radius:2px}
+  .sug-radio{flex:none;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--linha-forte);background:#fff}
+  .sug.sel .sug-radio{border-color:var(--verde);background:var(--verde) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%23f4e8be' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m2.5 6.5 2.5 2.5 4.5-5'/%3E%3C/svg%3E") center no-repeat}
+  .mini{width:52px;height:60px;object-fit:contain;background:var(--sup-2);border-radius:var(--r-s);flex:none;padding:3px}
+  .mini-p{width:38px;height:44px}
+  .mini.semfoto{display:flex;align-items:center;justify-content:center;font-size:10px;line-height:1.1;color:var(--fraco);text-align:center}
+  .tag{display:inline-block;font-family:var(--sans);font-size:11px;font-weight:600;padding:1px 7px;border-radius:99px;background:var(--sup-2);color:var(--sub);margin-left:6px;vertical-align:1px;letter-spacing:0}
+  .tag.enc{background:var(--alerta-suave);color:var(--alerta)}
+  .tag.rev{background:var(--erro-suave);color:var(--erro)}
+
+  details{margin-top:var(--e3)}
+  details summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:var(--e3);min-height:48px;padding:0 var(--e4);border:1px dashed var(--linha-forte);border-radius:var(--r-m);font-size:15px;font-weight:600;color:var(--verde)}
+  details summary::-webkit-details-marker{display:none}
+  details summary::after{content:"";width:9px;height:9px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg) translateY(-3px);transition:transform .15s}
+  details[open] summary{border-style:solid;border-color:var(--linha);border-radius:var(--r-m) var(--r-m) 0 0;background:var(--sup)}
+  details[open] summary::after{transform:rotate(225deg) translateY(-3px)}
+  .det-corpo{border:1px solid var(--linha);border-top:0;border-radius:0 0 var(--r-m) var(--r-m);background:var(--sup);padding:var(--e4)}
+
+  .lista{max-height:264px;overflow:auto;border:1px solid var(--linha);border-radius:var(--r-m);margin-top:var(--e2);background:#fff}
+  .lista button{display:flex;gap:var(--e3);align-items:center;width:100%;text-align:left;border:0;border-bottom:1px solid var(--linha);background:none;padding:var(--e2) var(--e3);font-size:14px;line-height:1.3;cursor:pointer;min-height:48px}
+  .lista button:last-child{border-bottom:0}
+  .lista button:active{background:var(--verde-suave)}
+  .lista button b{font-family:var(--mono);font-weight:600}
+  .lista .vazio{padding:var(--e4)}
+
+  .escolha{display:flex;align-items:center;gap:var(--e3);min-height:76px;font-size:15px;color:var(--sub);padding:var(--e3);background:var(--verde-suave);border-radius:var(--r-m);margin:var(--e3) 0}
+  .escolha .linha{gap:var(--e3)}
+  .escolha .mini{background:rgba(255,255,255,.6)}
+  .escolha .sku,.escolha>b{font-family:var(--mono);font-weight:600;font-size:19px;color:var(--tinta)}
+  .qtd{display:flex;gap:var(--e2);align-items:center}
+  .qtd input{text-align:center;font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
+  .qtd input::-webkit-inner-spin-button{appearance:none}
+  .qtd .bt{width:56px;flex:none;font-size:22px;padding:0}
+  /* barra de ação fixa enquanto há resultado aberto */
+  .acoes{position:sticky;bottom:calc(var(--nav) + env(safe-area-inset-bottom));z-index:3;display:flex;gap:var(--e2);margin:var(--e4) calc(-1 * var(--e4)) 0;padding:var(--e3) var(--e4);background:var(--fundo);border-top:1px solid var(--linha)}
+  .acoes .bt{flex:1} .acoes .bt:last-child{flex:2}
+
+  /* ---------- Listas de registros ---------- */
+  .reg{display:flex;justify-content:space-between;align-items:center;gap:var(--e3);padding:var(--e3) 0;border-bottom:1px solid var(--linha);font-size:14px}
+  .reg:first-child{padding-top:0} .reg:last-child{border-bottom:0;padding-bottom:0}
+  .reg .sku{font-size:15px}
+  .st{font-size:12px;font-weight:600;padding:2px 10px;border-radius:99px;white-space:nowrap}
+  .st.pendente{background:var(--alerta-suave);color:var(--alerta)} .st.enviado{background:var(--ok-suave);color:var(--ok)}
+  .resumo{display:flex;align-items:center;gap:var(--e4)}
+  .resumo .num{font-size:44px;line-height:1;font-weight:700;font-variant-numeric:tabular-nums;color:var(--verde);min-width:1.2ch}
+  .resumo .erro{color:var(--erro);font-size:13px;margin-top:var(--e1)}
+  .paleta{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:var(--e2)}
+  .paleta div{display:flex;align-items:center;font-size:13px;line-height:1.25;padding:var(--e2);border:1px solid var(--linha);border-radius:var(--r-s);background:#fff}
+  .paleta .sw{width:26px;height:26px;border-radius:6px;margin-right:var(--e2)}
+  .passo{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--verde);color:var(--creme);font-size:12px;font-weight:700;flex:none;align-self:center}
+
+  /* ---------- Navegação ---------- */
+  nav.abas{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;background:var(--sup);border-top:1px solid var(--linha);padding-bottom:env(safe-area-inset-bottom);z-index:6}
+  nav.abas button{flex:1;max-width:140px;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:0;background:none;height:var(--nav);font-size:12px;font-weight:500;color:var(--sub);cursor:pointer}
+  nav.abas svg{width:24px;height:24px;padding:2px 0;box-sizing:content-box;border-radius:99px;transition:background .15s,padding .15s}
+  nav.abas button.on{color:var(--verde);font-weight:700}
+  nav.abas button.on svg{background:var(--verde-suave);padding:2px 16px}
+  .badge{position:absolute;top:6px;left:calc(50% + 8px);min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:var(--alerta);color:#fff;font-size:11px;font-weight:700;font-style:normal;line-height:18px;text-align:center}
+
+  .toast{position:fixed;left:50%;bottom:calc(var(--nav) + 20px + env(safe-area-inset-bottom));transform:translate(-50%,6px);background:var(--tinta);color:#fff;padding:var(--e3) var(--e4);border-radius:var(--r-m);font-size:14px;font-weight:500;opacity:0;transition:opacity .18s,transform .18s;pointer-events:none;z-index:9;width:max-content;max-width:calc(100vw - 32px);text-align:center}
+  .toast.on{opacity:1;transform:translate(-50%,0)}
+
+  /* ---------- Esteira (aba oculta por enquanto) ---------- */
+  .estwrap{background:#0e1513;border-radius:var(--r-g);overflow:hidden}
+  .estwrap canvas{display:block;width:100%;height:auto}
+  .contador{display:flex;justify-content:space-between;align-items:center;margin-top:var(--e3)}
+  .contador b{font-size:34px;color:var(--verde);margin-right:var(--e1)}
+  .peca{display:flex;gap:var(--e3);align-items:center;padding:var(--e2) 0;border-bottom:1px solid var(--linha);font-size:13px}
+  .peca img{width:56px;height:56px;object-fit:contain;background:var(--sup-2);border-radius:var(--r-s);flex:none}
+
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
 <body>
 
 <header class="topo">
-  <b>Vasos</b>
-  <span id="stModelo" class="pill">modelo…</span>
+  <div class="marca">
+    <img src="data:image/webp;base64,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" alt="Japi Garden">
+    <span>Identificação de vasos</span>
+  </div>
+  <span id="stModelo" class="pill" hidden>modelo…</span>
   <span id="stRede" class="pill">…</span>
   <span id="stFila" class="pill">fila 0</span>
 </header>
 
 <main>
   <!-- Câmera (usada em Identificar e Cadastro) -->
-  <section id="cam" class="cam">
+  <section id="cam" class="cam" aria-label="Câmera">
     <div class="vwrap" id="vwrap">
       <video id="video" playsinline muted autoplay></video>
       <div class="guia"></div>
       <div class="amostra"></div>
       <canvas id="previa" class="previa"></canvas>
-      <div id="previaMsg" class="previa-msg" hidden></div>
+      <div id="previaMsg" class="previa-msg" role="status" hidden></div>
       <div class="flash" id="flash"></div>
     </div>
-    <div class="camerr" id="camErr" hidden></div>
+    <div class="camerr" id="camErr" role="alert" hidden></div>
   </section>
 
   <!-- IDENTIFICAR -->
   <section id="tab-ident" class="tab">
-    <button id="btCapturar" class="bt grande">📷 Capturar</button>
+    <button id="btCapturar" class="bt grande" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2l1.3-2h6.4l1.3 2h2A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.500z"/><circle cx="12" cy="13" r="3.5"/></svg>
+      Capturar
+    </button>
+    <p class="dica" id="dicaIdent">Enquadre a peça inteira entre os cantos. O quadro do centro lê a cor.</p>
 
     <div id="resultado" hidden>
-      <div id="avisoCorte" class="aviso" hidden>A peça não coube inteira na guia: o contorno ficou cortado e a sugestão pode estar errada. Afaste o celular e capture de novo.</div>
+      <div id="avisoCorte" class="aviso" role="alert" hidden>A peça não coube inteira na guia. O contorno ficou cortado e a sugestão pode estar errada: afaste o celular e capture de novo.</div>
+
       <h3>Leitura</h3>
       <div class="card snap">
-        <img id="snapImg" alt="">
+        <img id="snapImg" alt="Foto capturada com o contorno da peça">
         <div>
           <div id="corLida"></div>
           <div class="sub" id="modeloLido"></div>
         </div>
       </div>
 
-      <h3>Sugestões</h3>
-      <div id="sugestoes"></div>
+      <h3>Sugestões <small class="sub" id="nSug"></small></h3>
+      <div id="sugestoes" role="radiogroup" aria-label="Sugestões de SKU"></div>
 
       <details id="corrigir">
-        <summary>Corrigir modelo / cor</summary>
-        <label class="campo">Modelo</label>
-        <input type="search" id="idBusca" placeholder="Buscar: código, linha, tamanho…" autocomplete="off">
-        <div class="lista" id="idLista"></div>
-        <label class="campo">Cor</label>
-        <select id="idCor"></select>
+        <summary>Não é nenhuma? Escolher manualmente</summary>
+        <div class="det-corpo">
+          <label class="campo" for="idBusca">Modelo</label>
+          <input type="search" id="idBusca" placeholder="Código, linha ou tamanho" autocomplete="off">
+          <div class="lista" id="idLista"></div>
+          <label class="campo" for="idCor">Cor</label>
+          <select id="idCor"></select>
+        </div>
       </details>
 
-      <div class="escolha" id="escolhaAtual">Nenhum SKU escolhido</div>
-
-      <label class="campo">Quantidade</label>
-      <div class="qtd">
-        <button class="bt sec" data-d="-1" type="button">−</button>
-        <input type="number" id="qtd" value="1" min="1" inputmode="numeric">
-        <button class="bt sec" data-d="1" type="button">+</button>
+      <h3>Registro</h3>
+      <div class="card">
+        <div class="escolha" id="escolhaAtual" style="margin-top:0">Nenhum SKU escolhido</div>
+        <label class="campo" for="qtd">Quantidade</label>
+        <div class="qtd">
+          <button class="bt sec" data-d="-1" type="button" aria-label="Diminuir quantidade">−</button>
+          <input type="number" id="qtd" value="1" min="1" inputmode="numeric">
+          <button class="bt sec" data-d="1" type="button" aria-label="Aumentar quantidade">+</button>
+        </div>
+        <label class="chk" style="margin-bottom:0"><input type="checkbox" id="chkTreinar"> <span>Guardar esta peça como referência<br><small>Ajuda a acertar o modelo e a cor na próxima vez</small></span></label>
       </div>
 
-      <label class="chk"><input type="checkbox" id="chkTreinar"> Guardar o contorno desta peça para acertar melhor da próxima vez</label>
-
-      <div class="linha">
+      <div class="acoes">
         <button id="btDescartar" class="bt sec" type="button">Descartar</button>
-        <button id="btRegistrar" class="bt" type="button">✔ Registrar</button>
+        <button id="btRegistrar" class="bt" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.500 9.500-10"/></svg>
+          Registrar
+        </button>
       </div>
     </div>
   </section>
 
-  <!-- CADASTRO / TREINO -->
+  <!-- CADASTRO / REFERÊNCIAS -->
   <section id="tab-cad" class="tab" hidden>
     <h3 hidden>Treino inicial com o catálogo</h3>
     <div class="card" hidden>
-      <p class="sub" style="margin-top:0">Usa as fotos dos produtos do catálogo 2026 (cerca de 140 modelos) para dar um ponto de partida ao reconhecimento. Gera variações de cada foto (fundo, giro, tamanho, luz). Leva 1 a 3 minutos e só precisa ser feito uma vez por celular. Depois, as fotos reais confirmadas no dia a dia vão melhorando o acerto.</p>
       <div class="linha">
         <button id="btTreinoCat" class="bt" type="button">Treinar com o catálogo</button>
         <button id="btApagarCat" class="bt sec peq" type="button">Apagar treino do catálogo</button>
       </div>
-      <div id="progCat" class="sub" style="margin-top:8px"></div>
+      <div id="progCat" class="sub"></div>
     </div>
 
-    <h3>1. Escolha o modelo</h3>
-    <input type="search" id="cadBusca" placeholder="Buscar: código, linha, tamanho…" autocomplete="off">
+    <h3><span class="passo">1</span> Escolha o modelo</h3>
+    <input type="search" id="cadBusca" placeholder="Código, linha ou tamanho" autocomplete="off" aria-label="Buscar modelo">
     <div class="lista" id="cadLista"></div>
     <div class="escolha" id="cadSel">Nenhum modelo escolhido</div>
 
-    <h3>2. Fotografe</h3>
+    <h3><span class="passo">2</span> Fotografe a peça</h3>
     <div class="linha">
       <button id="btCad1" class="bt" type="button">Capturar 1</button>
-      <button id="btCadRajada" class="bt" type="button">Rajada (10)</button>
+      <button id="btCadRajada" class="bt sec" type="button">Rajada de 10</button>
     </div>
-    <p class="sub">Use vasos de cores diferentes e gire a peça entre as fotos. Procure manter a mesma distância e a mesma luz que serão usadas na identificação. 15 a 20 fotos por modelo é um bom começo.</p>
+    <p class="dica" style="text-align:left;margin-left:0;margin-right:0">Gire a peça entre as fotos e mantenha a distância e a luz que serão usadas no dia a dia.</p>
 
-    <h3>Modelos treinados</h3>
+    <h3>Modelos com referência</h3>
     <div id="listaTreinados" class="card" style="max-height:320px;overflow:auto"></div>
 
     <h3>Calibrar cores</h3>
     <div class="card">
-      <p class="sub" style="margin-top:0">Coloque um vaso da cor escolhida com a área amarela sobre o corpo da peça e capture. Repita algumas vezes por cor. Sem calibração, o app usa as cores do catálogo, que são só aproximadas.</p>
-      <select id="calCor"></select>
-      <div class="linha" style="margin-top:8px">
+      <p class="sub">Aponte o quadro do centro para o corpo de uma peça da cor escolhida e capture. Repita algumas vezes por cor. Sem calibração, o app usa as cores do catálogo impresso, que são aproximadas.</p>
+      <select id="calCor" aria-label="Cor a calibrar"></select>
+      <div class="linha" style="margin-top:var(--e2)">
         <button id="btCal" class="bt" type="button">Capturar cor</button>
-        <button id="btCalReset" class="bt sec" type="button">Apagar calibração</button>
+        <button id="btCalReset" class="bt sec" type="button">Zerar esta cor</button>
       </div>
-      <div class="paleta" id="paleta" style="margin-top:10px"></div>
+      <div class="paleta" id="paleta" style="margin-top:var(--e4)"></div>
     </div>
   </section>
 
   <!-- ESTEIRA (fluxo contínuo) -->
   <section id="tab-est" class="tab" hidden>
     <div class="estwrap"><canvas id="estTela" width="640" height="360"></canvas></div>
-    <div class="linha" style="margin-top:8px">
+    <div class="linha" style="margin-top:var(--e2)">
       <button id="estIniciar" class="bt" type="button">▶ Iniciar</button>
       <button id="estFundo" class="bt sec" type="button">Calibrar fundo</button>
     </div>
-    <div id="estStatus" class="sub" style="margin-top:6px"></div>
+    <div id="estStatus" class="sub" style="margin-top:var(--e2)"></div>
 
     <div class="card contador">
       <div><b id="estTotal">0</b> peça(s) contada(s)</div>
@@ -211,58 +348,64 @@
 
     <h3>Calibração</h3>
     <div class="card">
-      <p class="sub" style="margin-top:0"><b>1. Fundo:</b> com a esteira vazia, toque em "Calibrar fundo".<br>
+      <p class="sub"><b>1. Fundo:</b> com a esteira vazia, toque em "Calibrar fundo".<br>
       <b>2. Escala:</b> escolha o modelo de uma peça conhecida, toque em "Próxima peça calibra a escala" e passe essa peça pela linha.<br>
       <b>3. Cores:</b> escolha a cor, toque em "Próxima peça calibra a cor" e passe uma peça dessa cor. Repita 2 ou 3 vezes por cor.</p>
-      <label class="campo">Modelo da peça de referência (escala)</label>
-      <input type="search" id="estEscBusca" placeholder="Buscar: código, linha, tamanho…" autocomplete="off">
+      <label class="campo" for="estEscBusca">Modelo da peça de referência (escala)</label>
+      <input type="search" id="estEscBusca" placeholder="Código, linha ou tamanho" autocomplete="off">
       <div class="lista" id="estEscLista" style="max-height:160px"></div>
       <div class="escolha" id="estEscSel">Nenhum modelo escolhido</div>
       <button id="estEscala" class="bt" type="button" style="width:100%">Próxima peça calibra a escala</button>
-      <label class="campo">Cor da peça de referência</label>
+      <label class="campo" for="estCalCor">Cor da peça de referência</label>
       <select id="estCalCor"></select>
-      <button id="estCor" class="bt" type="button" style="width:100%;margin-top:8px">Próxima peça calibra a cor</button>
-      <div id="estCalInfo" class="sub" style="margin-top:8px"></div>
-      <div class="paleta" id="estPaleta" style="margin-top:10px"></div>
+      <button id="estCor" class="bt" type="button" style="width:100%;margin-top:var(--e2)">Próxima peça calibra a cor</button>
+      <div id="estCalInfo" class="sub" style="margin-top:var(--e2)"></div>
+      <div class="paleta" id="estPaleta" style="margin-top:var(--e3)"></div>
     </div>
 
     <h3>Ajustes</h3>
     <div class="card">
-      <label class="campo">Sensibilidade — diferença mínima do fundo: <b id="estLimiarV"></b></label>
+      <label class="campo" for="estLimiar">Sensibilidade (diferença mínima do fundo): <b id="estLimiarV"></b></label>
       <input type="range" id="estLimiar" min="15" max="160" step="5">
-      <label class="campo">Tamanho mínimo da peça (% da imagem): <b id="estMinAreaV"></b></label>
+      <label class="campo" for="estMinArea">Tamanho mínimo da peça: <b id="estMinAreaV"></b></label>
       <input type="range" id="estMinArea" min="0.5" max="15" step="0.5">
-      <label class="campo">Posição da linha de contagem (% da largura): <b id="estLinhaV"></b></label>
+      <label class="campo" for="estLinha">Posição da linha de contagem: <b id="estLinhaV"></b></label>
       <input type="range" id="estLinha" min="20" max="80" step="5">
-      <label class="campo">Confiança mínima — abaixo disso marca "revisar" e envia foto: <b id="estConfMinV"></b></label>
+      <label class="campo" for="estConfMin">Confiança mínima (abaixo disso marca "revisar"): <b id="estConfMinV"></b></label>
       <input type="range" id="estConfMin" min="5" max="95" step="5">
-      <label class="chk"><input type="checkbox" id="estRegistrar"> Registrar cada peça na planilha</label>
-      <label class="chk"><input type="checkbox" id="estSempreFoto"> Enviar foto de todas as peças (consome mais dados)</label>
-      <label class="chk"><input type="checkbox" id="estSombra"> Ignorar sombras</label>
-      <label class="chk"><input type="checkbox" id="estMascara"> Mostrar o que o app enxerga como peça (vermelho)</label>
-      <button id="estTravar" class="bt sec peq" type="button">Travar exposição/branco da câmera</button>
+      <label class="chk"><input type="checkbox" id="estRegistrar"> <span>Registrar cada peça na planilha</span></label>
+      <label class="chk"><input type="checkbox" id="estSempreFoto"> <span>Enviar foto de todas as peças</span></label>
+      <label class="chk"><input type="checkbox" id="estSombra"> <span>Ignorar sombras</span></label>
+      <label class="chk"><input type="checkbox" id="estMascara"> <span>Mostrar o que o app enxerga como peça</span></label>
+      <button id="estTravar" class="bt sec peq" type="button">Travar exposição e branco da câmera</button>
     </div>
   </section>
 
   <!-- FILA -->
   <section id="tab-fila" class="tab" hidden>
-    <div class="card" id="filaResumo"></div>
-    <button id="btEnviar" class="bt grande" type="button">Enviar agora</button>
+    <h2>Fila de envio</h2>
+    <div class="card resumo" id="filaResumo"></div>
+    <button id="btEnviar" class="bt grande" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4m0 0L8 8m4-4 4 4M5 15v3.500A1.500 1.500 0 0 0 6.500 20h11a1.500 1.500 0 0 0 1.500-1.500V15"/></svg>
+      Enviar agora
+    </button>
     <h3>Últimos registros</h3>
     <div class="card" id="filaLista"></div>
   </section>
 
   <!-- CONFIG -->
   <section id="tab-cfg" class="tab" hidden>
-    <h3>Operador e envio</h3>
+    <h2>Configurações</h2>
+
+    <h3 style="margin-top:0">Operador e envio</h3>
     <div class="card">
-      <label class="campo">Operador (nome ou matrícula)</label>
+      <label class="campo" for="cfgOperador">Operador (nome ou matrícula)</label>
       <input type="text" id="cfgOperador" autocomplete="off">
-      <label class="campo">URL do Apps Script (termina em /exec)</label>
+      <label class="campo" for="cfgUrl">URL do Apps Script (termina em /exec)</label>
       <input type="url" id="cfgUrl" placeholder="https://script.google.com/macros/s/…/exec">
-      <label class="campo">Token</label>
+      <label class="campo" for="cfgToken">Token</label>
       <input type="password" id="cfgToken" autocomplete="off">
-      <label class="chk"><input type="checkbox" id="cfgTreinar"> Marcar "usar para treinar" por padrão</label>
+      <label class="chk"><input type="checkbox" id="cfgTreinar"> <span>Guardar cada peça confirmada como referência</span></label>
       <div class="linha">
         <button id="btTestar" class="bt sec" type="button">Testar conexão</button>
         <button id="btSalvar" class="bt" type="button">Salvar</button>
@@ -271,48 +414,72 @@
 
     <h3>Catálogo</h3>
     <div class="card">
-      <div id="catInfo" class="sub"></div>
-      <label class="campo">Importar catálogo (JSON gerado pelo Gemini)</label>
+      <p id="catInfo" class="sub"></p>
+      <label class="campo" for="catArq">Importar catálogo (arquivo JSON)</label>
       <input type="file" id="catArq" accept=".json,application/json">
-      <button id="btCatReset" class="bt sec peq" type="button" style="margin-top:8px">Usar catálogo do servidor</button>
+      <button id="btCatReset" class="bt sec peq" type="button" style="margin-top:var(--e3)">Usar catálogo do servidor</button>
     </div>
 
-    <h3>Treino (compartilhar entre celulares)</h3>
+    <h3>Referências entre celulares</h3>
     <div class="card">
-      <div id="treinoInfo" class="sub"></div>
-      <div class="linha" style="margin-top:8px">
-        <button id="btExportar" class="bt sec" type="button">Exportar treino</button>
-      </div>
-      <label class="campo">Importar treino (soma ao que já existe)</label>
+      <p id="treinoInfo" class="sub"></p>
+      <button id="btExportar" class="bt sec" type="button" style="width:100%">Exportar referências</button>
+      <label class="campo" for="treinoArq">Importar referências (soma ao que já existe)</label>
       <input type="file" id="treinoArq" accept=".json,application/json">
     </div>
 
     <h3>Avançado</h3>
     <div class="card">
-      <label class="campo">URL do modelo MobileNet (vazio = padrão)</label>
-      <input type="url" id="cfgModelUrl" placeholder="padrão: MobileNet v2 1.0">
-      <div class="linha" style="margin-top:10px">
-        <button id="btApagarTreino" class="bt perigo peq" type="button">Apagar todo o treino</button>
-        <button id="btApagarFila" class="bt perigo peq" type="button">Apagar fila enviada</button>
+      <div id="campoModelUrl" hidden>
+        <label class="campo" for="cfgModelUrl">URL do modelo MobileNet (vazio = padrão)</label>
+        <input type="url" id="cfgModelUrl" placeholder="padrão: MobileNet v2 1.0">
       </div>
-      <p class="sub" id="versaoInfo"></p>
+      <div class="linha">
+        <button id="btApagarTreino" class="bt perigo peq" type="button">Apagar referências</button>
+        <button id="btApagarFila" class="bt perigo peq" type="button">Limpar enviados</button>
+      </div>
+      <p class="sub" id="versaoInfo" style="margin:var(--e3) 0 0"></p>
     </div>
   </section>
 </main>
 
-<nav class="abas">
-  <button data-tab="ident" class="on"><span>📷</span>Identificar</button>
-  <button data-tab="est" hidden><span>🏭</span>Esteira</button>
-  <button data-tab="cad"><span>🧠</span>Cadastro</button>
-  <button data-tab="fila"><span>📤</span>Fila</button>
-  <button data-tab="cfg"><span>⚙️</span>Config</button>
+<nav class="abas" aria-label="Seções">
+  <button data-tab="ident" class="on" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M8.500 9h7l-1 6.500h-5z"/></svg>
+    Identificar
+  </button>
+  <button data-tab="est" type="button" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="14" width="18" height="5" rx="2.500"/><path d="M8 10h8v4H8z"/></svg>
+    Esteira
+  </button>
+  <button data-tab="cad" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4h12a1 1 0 0 1 1 1v15l-7-4-7 4V5a1 1 0 0 1 1-1z"/><path d="M12 8v5M9.500 10.500h5"/></svg>
+    Cadastro
+  </button>
+  <button data-tab="fila" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 14V4m0 0L8.500 7.500M12 4l3.500 3.500"/><path d="M4 13.500 6 19h12l2-5.500"/></svg>
+    Fila
+    <i class="badge" id="navFila" hidden></i>
+  </button>
+  <button data-tab="cfg" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
+    Config
+  </button>
 </nav>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 'use strict';
-const VERSAO_APP = '0.7';
+const VERSAO_APP = '0.9';
+// Sugestões: mostra todas com pontuação >= SUG_PARECIDO × a melhor (máx. SUG_MAX)
+const SUG_PARECIDO = 0.2, SUG_MAX = 12;
+// miniatura do catálogo (pasta treino/) para um modelo
+function miniCat(base, cls = 'mini') {
+  return window.Esteira && Esteira.S.perfis.has(base)
+    ? `<img class="${cls}" src="treino/${esc(base)}.webp" alt="" loading="lazy" onerror="this.style.visibility='hidden'">`
+    : `<span class="${cls} semfoto">sem foto</span>`;
+}
 // IA (MobileNet) desligada: o reconhecimento é só por código (contorno + cor). Para religar, true.
 const USAR_IA = false;
 
@@ -666,7 +833,7 @@ async function identificar() {
     const coresTodas = Cores.classificar(cor);
     // o formato escolhe o modelo; a cor é escolhida entre as cores possíveis daquele modelo
     const sug = [];
-    for (const m of modelos.slice(0, 6)) {
+    for (const m of modelos.slice(0, 15)) {
       const ops = Cat.opcoesCor(m.base), possiveis = ops.map(o => o.cor).filter(Boolean);
       const cl = possiveis.length ? Cores.classificar(cor, possiveis) : [];
       const pc = Object.fromEntries(cl.map(c => [c.cor, c.p]));
@@ -676,45 +843,55 @@ async function identificar() {
       }
     }
     sug.sort((a, b) => b.p - a.p);
-    // no máximo 2 cores do mesmo modelo nas 3 sugestões (mistura alternativa de cor e de formato)
-    const porBase = {}, top = [];
-    for (const x of sug) { if ((porBase[x.base] || 0) >= 2) continue; porBase[x.base] = (porBase[x.base] || 0) + 1; top.push(x); if (top.length === 3) break; }
+    // sugestões: todas as parecidas com a melhor (pontuação >= 20% da 1ª), até 2 cores por modelo, no máx. 12
+    const porBase = {}, top = [], corte = sug.length ? sug[0].p * SUG_PARECIDO : 0;
+    for (const x of sug) {
+      if (x.p < corte || top.length >= SUG_MAX) break;
+      if ((porBase[x.base] || 0) >= 2) continue;
+      porBase[x.base] = (porBase[x.base] || 0) + 1; top.push(x);
+    }
     cap = { foto:q.foto, cor, vetor, modelos, cores:coresTodas, sugestoes:top, sil };
     mostrarResultado();
   } finally { btn.disabled = false; }
 }
 
 function mostrarResultado() {
-  $('#resultado').hidden = false;
+  $('#resultado').hidden = false; $('#dicaIdent').hidden = true;
   $('#snapImg').src = (cap.sil ? cap.sil.conferencia : cap.foto).toDataURL('image/jpeg', 0.7);
   $('#avisoCorte').hidden = !(cap.sil && cap.sil.toca);
   const c0 = cap.cores[0];
   const nCal = Object.values(Cores.refs).filter(r => r.n > 0).length;
-  $('#corLida').innerHTML = `<span class="sw" style="background:${cap.cor.hex}"></span> Cor lida: <b>${esc(Cat.nomeCor(c0.cor))}</b> <small class="sub">(${pct(c0.p)})</small>` +
-    `<br><small class="sub">${nCal ? nCal + ' cor(es) já aprendida(s) com peças reais' : 'cores ainda do catálogo impresso — confirme algumas peças para o app aprender'}</small>`;
+  $('#corLida').innerHTML = `<span class="sw" style="background:${cap.cor.hex}"></span><b>${esc(Cat.nomeCor(c0.cor))}</b> <small>${pct(c0.p)}</small>` +
+    `<br><small>${nCal ? nCal + (nCal > 1 ? ' cores já aprendidas' : ' cor já aprendida') + ' com peças reais' : 'Cores ainda do catálogo impresso. Confirme algumas peças para o app aprender.'}</small>`;
   let txt;
   if (!cap.sil && !cap.modelos.length) txt = 'Não consegui separar o vaso do fundo — afaste um pouco, centralize a peça e use um fundo liso. Ou escolha manualmente.';
   else if (cap.modelos[0]) {
-    txt = `Contorno mais parecido: ${cap.modelos[0].base} (${pct(cap.modelos[0].p)})` + (cap.sil && cap.sil.toca ? ' — a peça encostou na borda, afaste um pouco' : '');
+    txt = `Contorno mais parecido: ${cap.modelos[0].base} (${pct(cap.modelos[0].p)})` + (cap.sil && cap.sil.toca ? '. A peça encostou na borda, afaste um pouco' : '');
     const fam = cap.modelos[0].base.slice(0, 4);
-    if (cap.modelos.slice(1, 4).some(m => m.base.slice(0, 4) === fam && m.p > 0.1)) txt += ' — confira o TAMANHO: esse formato existe em mais de uma medida.';
+    if (cap.modelos.slice(1, 4).some(m => m.base.slice(0, 4) === fam && m.p > 0.1)) txt += '. Confira o tamanho: esse formato existe em mais de uma medida.';
   }
   else txt = '';
   $('#modeloLido').textContent = txt;
 
   const box = $('#sugestoes');
   if (!cap.sugestoes.length) {
-    box.innerHTML = '<p class="sub">Sem sugestões. Use "Corrigir modelo / cor".</p>';
+    box.innerHTML = '<p class="sub">Sem sugestões para esta foto. Escolha o modelo manualmente abaixo.</p>'; $('#nSug').textContent = '';
     $('#corrigir').open = true; definirAtual(null);
   } else {
+    const pTop = cap.sugestoes[0].p || 1;
     box.innerHTML = cap.sugestoes.map((s, i) => `
-      <button class="sug" data-i="${i}" type="button">
-        <span class="sw" style="background:${Cores.refs[s.cor]?.hex || '#ccc'}"></span>
-        <span style="flex:1"><span class="sku">${esc(s.sku)}</span>${s.emLinha ? '' : '<span class="tag enc">encomenda</span>'}<br>
-        <small>${esc(Cat.rotulo(s.base))} · ${esc(Cat.nomeCor(s.cor))}</small><br>
-        <small>modelo ${pct(s.pModelo)} · cor ${pct(s.pCor)}</small></span>
+      <button class="sug" data-i="${i}" type="button" role="radio" aria-checked="false">
+        ${miniCat(s.base)}
+        <span class="sug-txt">
+          <span><span class="sku">${esc(s.sku)}</span>${s.emLinha ? '' : '<span class="tag enc">encomenda</span>'}</span>
+          <span class="sug-nome">${esc(Cat.rotulo(s.base))}</span>
+          <span class="sug-meta"><span class="sw sw-p" style="background:${Cores.refs[s.cor]?.hex || '#ccc'}"></span>${esc(Cat.nomeCor(s.cor))} · formato ${pct(s.pModelo)} · cor ${pct(s.pCor)}</span>
+          <span class="barra" aria-hidden="true"><i style="width:${Math.max(6, Math.round(100 * s.p / pTop))}%"></i></span>
+        </span>
+        <span class="sug-radio" aria-hidden="true"></span>
       </button>`).join('');
     $('#corrigir').open = false;
+    $('#nSug').textContent = `${cap.sugestoes.length} parecida${cap.sugestoes.length > 1 ? 's' : ''}`;
     definirAtual(cap.sugestoes[0]);
   }
   $('#qtd').value = 1;
@@ -726,10 +903,10 @@ function mostrarResultado() {
 
 function definirAtual(s) {
   atual = s ? { base:s.base, cor:s.cor, sku:s.sku, emLinha:s.emLinha } : null;
-  document.querySelectorAll('#sugestoes .sug').forEach(b => b.classList.toggle('sel', !!s && cap.sugestoes[b.dataset.i]?.sku === s.sku));
+  document.querySelectorAll('#sugestoes .sug').forEach(b => { const on = !!s && cap.sugestoes[b.dataset.i]?.sku === s.sku; b.classList.toggle('sel', on); b.setAttribute('aria-checked', on); });
   const el = $('#escolhaAtual');
   if (!atual) { el.innerHTML = 'Nenhum SKU escolhido'; preencherCores(null); return; }
-  el.innerHTML = `<span class="sku">${esc(atual.sku)}</span>${atual.emLinha ? '' : '<span class="tag enc">encomenda</span>'}<br><small class="sub">${esc(Cat.rotulo(atual.base))} · ${esc(Cat.nomeCor(atual.cor))}</small>`;
+  el.innerHTML = `${miniCat(atual.base)}<div><span class="sku">${esc(atual.sku)}</span>${atual.emLinha ? '' : '<span class="tag enc">encomenda</span>'}<br><small class="sub">${esc(Cat.rotulo(atual.base))} · ${esc(Cat.nomeCor(atual.cor))}</small></div>`;
   preencherCores(atual.base, atual.cor);
 }
 
@@ -780,7 +957,7 @@ async function registrar() {
   Fila.enviar();
 }
 
-function descartar() { cap = null; atual = null; $('#resultado').hidden = true; window.scrollTo({ top:0, behavior:'smooth' }); }
+function descartar() { cap = null; atual = null; $('#resultado').hidden = true; $('#dicaIdent').hidden = false; window.scrollTo({ top:0, behavior:'smooth' }); }
 
 /* =========================================================
    Seletor de modelo (busca)
@@ -789,7 +966,7 @@ function criarPicker(input, lista, aoEscolher) {
   const render = () => {
     if (!Cat.bases.size) { lista.innerHTML = '<p class="vazio">Catálogo não carregado (veja Config).</p>'; return; }
     const itens = Cat.buscar(input.value);
-    lista.innerHTML = itens.map(b => `<button type="button" data-b="${esc(b.base)}"><b>${esc(b.base)}</b> — ${esc(Cat.rotulo(b.base))}</button>`).join('') || '<p class="vazio">Nada encontrado</p>';
+    lista.innerHTML = itens.map(b => `<button type="button" data-b="${esc(b.base)}">${miniCat(b.base, 'mini mini-p')}<span><b>${esc(b.base)}</b><br><small>${esc(Cat.rotulo(b.base))}</small></span></button>`).join('') || '<p class="vazio">Nada encontrado</p>';
   };
   input.addEventListener('input', render);
   lista.addEventListener('click', e => { const bt = e.target.closest('button[data-b]'); if (bt) aoEscolher(bt.dataset.b); });
@@ -806,7 +983,7 @@ const pickCad = criarPicker($('#cadBusca'), $('#cadLista'), b => { cadBase = b; 
 function renderCadSel() {
   const n = Treino.contagem()[cadBase] || 0;
   const ns = window.Esteira ? Esteira.nSil(cadBase) : 0;
-  $('#cadSel').innerHTML = cadBase ? `<b>${esc(cadBase)}</b> — ${esc(Cat.rotulo(cadBase))}<br><small class="sub">${ns} contorno(s) real(is) · ${n} foto(s) para a IA</small>` : 'Nenhum modelo escolhido';
+  $('#cadSel').innerHTML = cadBase ? `${miniCat(cadBase)}<div><span class="sku">${esc(cadBase)}</span><br><small>${esc(Cat.rotulo(cadBase))}</small><br><small>${ns} referência${ns === 1 ? '' : 's'} real${ns === 1 ? '' : 'is'}${USAR_IA ? ' · ' + n + ' foto(s) para a IA' : ''}</small></div>` : 'Nenhum modelo escolhido';
 }
 
 async function cadastrar(qtd) {
@@ -832,12 +1009,12 @@ function renderTreinados() {
   const c = Treino.contagem(), sil = window.Esteira ? Esteira.S.silReais : new Map();
   const ks = [...new Set([...Object.keys(c), ...sil.keys()])].sort();
   $('#listaTreinados').innerHTML = ks.length ? ks.map(b => `
-    <div class="reg"><span><span class="sku">${esc(b)}</span> <small class="sub">${esc(Cat.rotulo(b))}</small><br>
-    <small class="sub">${(sil.get(b) || []).length} contorno(s) · ${c[b] || 0} p/ IA</small></span>
-    <span class="linha"><button class="bt sec peq" data-del="${esc(b)}" type="button">apagar</button></span></div>`).join('')
-    : '<p class="vazio">Nenhum modelo treinado ainda.</p>';
+    <div class="reg"><span><span class="sku">${esc(b)}</span><br><small>${esc(Cat.rotulo(b))} · ${(sil.get(b) || []).length} referência(s)${USAR_IA ? ' · ' + (c[b] || 0) + ' p/ IA' : ''}</small></span>
+    <button class="bt perigo peq" data-del="${esc(b)}" type="button">Apagar</button></div>`).join('')
+    : '<p class="vazio">Nenhum modelo com referência ainda.<br>Confirme peças no Identificar ou fotografe aqui.</p>';
   const nCat = Treino.ex.filter(e => e.origem === 'catalogo').length;
-  $('#treinoInfo').textContent = `${Treino.ex.length} exemplo(s) de treino em ${ks.length} modelo(s) — ${nCat} do catálogo, ${Treino.ex.length - nCat} de fotos reais.`;
+  const nRef = [...sil.values()].reduce((a, v) => a + v.length, 0);
+  $('#treinoInfo').textContent = USAR_IA ? `${Treino.ex.length} exemplo(s) de treino em ${ks.length} modelo(s) — ${nCat} do catálogo, ${Treino.ex.length - nCat} de fotos reais.` : `${nRef} referência${nRef === 1 ? '' : 's'} de peças reais em ${ks.length} modelo${ks.length === 1 ? '' : 's'}, guardadas neste celular.`;
   renderCadSel();
 }
 
@@ -846,7 +1023,7 @@ function renderPaleta() {
   sel.innerHTML = Object.keys(Cores.refs).map(c => `<option value="${c}">${esc(Cat.nomeCor(c))} (${c})</option>`).join('');
   if (v) sel.value = v;
   $('#paleta').innerHTML = Object.entries(Cores.refs).map(([c, r]) =>
-    `<div><span class="sw" style="background:${r.hex}"></span><span>${esc(Cat.nomeCor(c))}<br><small class="sub">${r.n ? 'calibrado (' + r.n + ')' : 'catálogo'}</small></span></div>`).join('');
+    `<div><span class="sw" style="background:${r.hex}"></span><span>${esc(Cat.nomeCor(c))}<br><small>${r.n ? r.n + (r.n > 1 ? ' leituras' : ' leitura') : 'do catálogo'}</small></span></div>`).join('');
 }
 
 async function calibrarCor() {
@@ -952,14 +1129,17 @@ const Fila = {
 async function atualizarFilaUI() {
   const todos = (await DB.todos('fila')).sort((a, b) => b.ts.localeCompare(a.ts));
   const pend = todos.filter(r => r.status !== 'enviado').length;
-  const p = $('#stFila'); p.textContent = Fila.enviando ? 'enviando…' : 'fila ' + pend; p.className = 'pill ' + (pend ? 'alerta' : 'ok');
-  $('#filaResumo').innerHTML = `<b>${pend}</b> pendente(s) de envio.` +
-    (cfg.url ? '' : '<br><span style="color:var(--erro)">URL do Apps Script não configurada.</span>') +
-    (Fila.ultimoErro ? `<br><span style="color:var(--erro)">Último erro: ${esc(Fila.ultimoErro)}</span>` : '');
+  const p = $('#stFila'); p.textContent = Fila.enviando ? 'Enviando…' : pend ? pend + ' na fila' : 'Fila vazia'; p.className = 'pill ' + (pend ? 'alerta' : 'ok');
+  const nb = $('#navFila'); nb.hidden = !pend; nb.textContent = pend > 99 ? '99+' : pend;
+  $('#btEnviar').disabled = !pend || Fila.enviando;
+  $('#filaResumo').innerHTML = `<div class="num">${pend}</div><div><b>${pend === 1 ? 'registro aguardando envio' : 'registros aguardando envio'}</b>` +
+    `<div class="sub">${pend ? (navigator.onLine ? 'O envio é automático quando há internet.' : 'Sem internet agora. Fica guardado no celular.') : 'Tudo enviado para a planilha.'}</div>` +
+    (cfg.url ? '' : '<div class="erro">URL do Apps Script não configurada (aba Config).</div>') +
+    (Fila.ultimoErro ? `<div class="erro">Último erro: ${esc(Fila.ultimoErro)}</div>` : '') + '</div>';
   $('#filaLista').innerHTML = todos.slice(0, 50).map(r => {
     const d = new Date(r.ts);
-    return `<div class="reg"><span><span class="sku">${esc(r.sku)}</span> × ${r.quantidade}<br><small class="sub">${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })} · ${esc(r.operador)}${r.corrigido ? ' · corrigido' : ''}</small></span><span class="st ${r.status}">${r.status}</span></div>`;
-  }).join('') || '<p class="vazio">Nenhum registro.</p>';
+    return `<div class="reg"><span><span class="sku">${esc(r.sku)}</span> <b>× ${r.quantidade}</b><br><small>${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })} · ${esc(r.operador)}${r.corrigido ? ' · corrigido' : ''}</small></span><span class="st ${r.status}">${r.status}</span></div>`;
+  }).join('') || '<p class="vazio">Nenhum registro ainda.</p>';
 }
 
 /* =========================================================
@@ -987,7 +1167,7 @@ async function importarTreino(arq) {
    Interface geral
    ========================================================= */
 function stModelo(txt, cls) { const p = $('#stModelo'); p.textContent = txt; p.className = 'pill ' + (cls || ''); }
-function stRede() { const p = $('#stRede'); p.textContent = navigator.onLine ? 'online' : 'offline'; p.className = 'pill ' + (navigator.onLine ? 'ok' : 'alerta'); }
+function stRede() { const p = $('#stRede'); p.textContent = navigator.onLine ? 'Online' : 'Offline'; p.className = 'pill ' + (navigator.onLine ? 'ok' : 'alerta'); }
 
 let abaAtual = 'ident';
 /* Prévia ao vivo: mostra o contorno que o app enxerga ANTES de capturar */
@@ -1014,15 +1194,14 @@ const Previa = {
           if (L[p] !== id) continue; const x = p % r.W, y = (p / r.W) | 0;
           const borda = x === 0 || y === 0 || x === r.W - 1 || y === r.H - 1 || L[p - 1] !== id || L[p + 1] !== id || L[p - r.W] !== id || L[p + r.W] !== id;
           if (borda) { im.data[p * 4] = cor[0]; im.data[p * 4 + 1] = cor[1]; im.data[p * 4 + 2] = cor[2]; im.data[p * 4 + 3] = 255; }
-          else { im.data[p * 4 + 1] = 255; im.data[p * 4 + 3] = 40; }
         }
         mc.putImageData(im, 0, 0);
         const gx = tela.width * GUIA[0], gy = tela.height * GUIA[1], gw = tela.width * (GUIA[2] - GUIA[0]), gh = tela.height * (GUIA[3] - GUIA[1]);
         ctx.imageSmoothingEnabled = false; ctx.drawImage(m, gx, gy, gw, gh);
         msg.hidden = false;
-        if (r.toca) { msg.className = 'previa-msg ruim'; msg.textContent = 'Contorno encostou na guia: afaste o celular ou tire o que está grudado atrás'; }
-        else { msg.className = 'previa-msg ok'; msg.textContent = '✔ Peça inteira — pode capturar'; }
-      } else { msg.hidden = false; msg.className = 'previa-msg ruim'; msg.textContent = 'Não achei a peça — centralize o vaso na área amarela'; }
+        if (r.toca) { msg.className = 'previa-msg ruim'; msg.textContent = 'O contorno encostou na guia. Afaste o celular ou separe a peça do que está atrás.'; }
+        else { msg.className = 'previa-msg ok'; msg.textContent = 'Peça inteira. Pode capturar.'; }
+      } else { msg.hidden = false; msg.className = 'previa-msg ruim'; msg.textContent = 'Não achei a peça. Centralize o vaso no quadro do centro.'; }
     } catch (e) { console.warn('prévia', e); }
     finally { this.ocupado = false; }
   },
@@ -1047,7 +1226,7 @@ function preencherCfg() {
   $('#cfgOperador').value = cfg.operador; $('#cfgUrl').value = cfg.url; $('#cfgToken').value = cfg.token;
   $('#cfgTreinar').checked = !!cfg.treinar; $('#cfgModelUrl').value = cfg.modelUrl;
   $('#catInfo').textContent = Cat.bases.size ? `${Cat.nProdutos} SKUs em ${Cat.bases.size} modelos — fonte: ${Cat.fonte}` : 'Nenhum catálogo carregado.';
-  $('#versaoInfo').textContent = `App v${VERSAO_APP} · modelo: ${Modelo.net ? Modelo.id : 'não carregado' + (Modelo.erro ? ' (' + Modelo.erro + ')' : '')}`;
+  $('#versaoInfo').textContent = `App v${VERSAO_APP} · ` + (USAR_IA ? `modelo: ${Modelo.net ? Modelo.id : 'não carregado'}` : 'reconhecimento por contorno e cor');
   renderTreinados();
 }
 

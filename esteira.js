@@ -269,7 +269,7 @@ const Esteira = (() => {
       res.push({ base: b.base, s });
     }
     res.sort((a, b) => a.s - b.s);
-    const top = res.slice(0, 8); if (!top.length) return [];
+    const top = res.slice(0, 20); if (!top.length) return [];
     const w = top.map(r => Math.exp(-(r.s - top[0].s) / 0.05)), tot = w.reduce((a, b) => a + b, 0);
     return top.map((r, i) => ({ ...r, p: w[i] / tot }));
   }
@@ -449,7 +449,7 @@ const Esteira = (() => {
   }
 
   function renderCal() {
-    $('#estEscSel').innerHTML = S.escBase ? `<b>${esc(S.escBase)}</b> — ${esc(Cat.rotulo(S.escBase))}` : 'Nenhum modelo escolhido';
+    $('#estEscSel').innerHTML = S.escBase ? `${miniCat(S.escBase)}<div><span class="sku">${esc(S.escBase)}</span><br><small>${esc(Cat.rotulo(S.escBase))}</small></div>` : 'Nenhum modelo escolhido';
     $('#estCalInfo').textContent = (S.escala ? `Escala atual: ${S.escala.toFixed(2)} px/cm.` : 'Escala ainda não calibrada.') + (S.modoCal ? ' Aguardando a próxima peça…' : '');
   }
   function renderPaleta() {

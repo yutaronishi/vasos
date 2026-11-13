@@ -1,7 +1,7 @@
 // Service worker: deixa o app funcionar offline depois do 1º acesso.
 // Ao publicar uma versão nova do app, troque o número abaixo.
-const VERSAO = 'vasos-v8';
-const BASE = ['./', './index.html', './esteira.js', './manifest.json', './icon-192.png', './icon-512.png'];
+const VERSAO = 'vasos-v10';
+const BASE = ['./', './index.html', './esteira.js', './figtree.woff2', './plexmono.woff2', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil((async () => {

@@ -1,14 +1,24 @@
 {
-  "name": "Identificação de Vasos",
-  "short_name": "Vasos",
+  "name": "Japi Garden · Identificação de vasos",
+  "short_name": "Vasos Japi",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f4f2ec",
-  "theme_color": "#1f5c4a",
+  "background_color": "#1e5c4f",
+  "theme_color": "#1e5c4f",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
   ]
 }
